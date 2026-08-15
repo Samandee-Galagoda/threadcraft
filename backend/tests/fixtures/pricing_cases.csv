@@ -1,0 +1,21 @@
+case_id,description,base_price,base_stitching,base_fabric_metres,reference_body_cm,material_cost_per_metre,colour_surcharge,option_premiums,option_multipliers,primary_body_cm,delivery_fee,free_delivery_threshold,size_factor_k,size_factor_min,size_factor_max,expected_fabric_metres,expected_base,expected_stitching,expected_material,expected_delivery,expected_total
+1,baseline tshirt no options no measurement,2200,300,1.4,96,650,0,,,,350,15000,0.60,0.85,1.40,1.40,2200.00,300.00,910.00,350.00,3760.00
+2,dress primary equals reference,3500,600,2.6,90,1800,0,,,90,350,15000,0.60,0.85,1.40,2.60,3500.00,600.00,4680.00,350.00,9130.00
+3,dress primary above reference,3500,600,2.6,90,1800,0,,,110,350,15000,0.60,0.85,1.40,2.91,3500.00,600.00,5238.00,350.00,9688.00
+4,dress primary below reference,3500,600,2.6,90,1800,0,,,70,350,15000,0.60,0.85,1.40,2.29,3500.00,600.00,4122.00,350.00,8572.00
+5,dress size factor clamps at max,3500,600,2.6,90,1800,0,,,200,350,15000,0.60,0.85,1.40,3.64,3500.00,600.00,6552.00,350.00,11002.00
+6,dress size factor clamps at min,3500,600,2.6,90,1800,0,,,10,350,15000,0.60,0.85,1.40,2.21,3500.00,600.00,3978.00,350.00,8428.00
+7,single option stitching premium only,2200,300,1.4,96,650,0,600,1.000,96,350,15000,0.60,0.85,1.40,1.40,2200.00,900.00,910.00,350.00,4360.00
+8,single option fabric multiplier only,2200,300,1.4,96,650,0,0,1.20,96,350,15000,0.60,0.85,1.40,1.68,2200.00,300.00,1092.00,350.00,3942.00
+9,two options combined premium and multiplier,2200,300,1.4,96,650,0,300;100,1.20;1.02,96,350,15000,0.60,0.85,1.40,1.71,2200.00,700.00,1111.50,350.00,4361.50
+10,degenerate no-op option matches baseline,2200,300,1.4,96,650,0,0,1.000,96,350,15000,0.60,0.85,1.40,1.40,2200.00,300.00,910.00,350.00,3760.00
+11,colour surcharge increases material cost,2200,300,1.4,96,650,50,,,96,350,15000,0.60,0.85,1.40,1.40,2200.00,300.00,980.00,350.00,3830.00
+12,subtotal exactly at free delivery threshold,2200,300,1.4,96,650,0,,,96,350,3410.00,0.60,0.85,1.40,1.40,2200.00,300.00,910.00,0.00,3410.00
+13,subtotal one cent under free delivery threshold,2200,300,1.4,96,650,0,,,96,350,3410.01,0.60,0.85,1.40,1.40,2200.00,300.00,910.00,350.00,3760.00
+14,subtotal one cent over free delivery threshold,2200,300,1.4,96,650,0,,,96,350,3409.99,0.60,0.85,1.40,1.40,2200.00,300.00,910.00,0.00,3410.00
+15,fabric metres rounds half up at the .xx5 boundary,1000,0,1.005,100,100,0,,,,0,0,0.60,0.85,1.40,1.01,1000.00,0.00,101.00,0.00,1101.00
+16,option multiplier combined with size factor,3500,600,2.6,90,1800,0,350,1.22,110,350,15000,0.60,0.85,1.40,3.55,3500.00,950.00,6390.00,350.00,11190.00
+17,three stacked options with distinct multipliers,2200,300,1.4,96,650,0,300;600;150,1.20;1.05;1.05,96,350,15000,0.60,0.85,1.40,1.85,2200.00,1350.00,1202.50,350.00,5102.50
+18,zero delivery fee never charges delivery,2200,300,1.4,96,650,0,,,96,0,15000,0.60,0.85,1.40,1.40,2200.00,300.00,910.00,0.00,3410.00
+19,high value order clears a lowered free threshold,4200,700,3.4,90,1800,0,600;400,1.05;1.03,90,350,10000,0.60,0.85,1.40,3.68,4200.00,1700.00,6624.00,0.00,12524.00
+20,minimal small-number sanity check,100,0,0.1,50,50,0,,,,10,1000000,0.60,0.85,1.40,0.10,100.00,0.00,5.00,10.00,115.00
