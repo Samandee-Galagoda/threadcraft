@@ -1,0 +1,48 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.core.deps import require_admin
+from app.db.session import get_db
+from app.models.order import Order
+from app.models.user import User
+from app.schemas.order import OrderOut, OrderStatusUpdate
+from app.services.orders import InvalidStatusTransition, transition_status
+
+router = APIRouter(prefix="/api/admin/orders", tags=["admin:orders"], dependencies=[Depends(require_admin)])
+
+
+@router.get("", response_model=list[OrderOut])
+def list_orders(status: str | None = None, db: Session = Depends(get_db)):
+    query = db.query(Order)
+    if status:
+        query = query.filter(Order.status == status)
+    return query.order_by(Order.created_at.desc()).all()
+
+
+@router.get("/{order_id}", response_model=OrderOut)
+def get_order(order_id: int, db: Session = Depends(get_db)):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return order
+
+
+@router.patch("/{order_id}/status", response_model=OrderOut)
+def update_order_status(
+    order_id: int,
+    payload: OrderStatusUpdate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    try:
+        transition_status(db, order, payload.status, changed_by_user_id=admin.id, note=payload.note)
+    except InvalidStatusTransition as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    db.commit()
+    db.refresh(order)
+    return order
