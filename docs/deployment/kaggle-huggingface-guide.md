@@ -1,76 +1,112 @@
 # Running the ML notebooks on Kaggle + Hugging Face
 
-Step-by-step for `ml/notebooks/01_dataset_prep_and_clean.ipynb` (and any training notebook after it). Do this once — the same token and secret work for every notebook you add.
+Setup for the four notebooks in [`ml/`](../../ml/). Do steps 1–3 **once** — the same token and
+secret work for every notebook.
 
-## 1. Create your Hugging Face account + token
+| Notebook | Accelerator | Internet | Roughly |
+|---|---|---|---|
+| `ml/classifier/01_data_cleaning.ipynb` | None (CPU) | On | few min |
+| `ml/classifier/02_train.ipynb` | **GPU T4 x2** | On | 25–50 min |
+| `ml/fit-recommender/01_data_cleaning.ipynb` | None (CPU) | On | 2–3 min |
+| `ml/fit-recommender/02_train.ipynb` | None (CPU) | On | 3–5 min |
+
+Only one of the four needs a GPU. Run the other three on CPU to protect your weekly quota.
+
+## 1. Hugging Face account + token
 
 1. Sign up / log in at https://huggingface.co
-2. Go to **Settings → Access Tokens** (https://huggingface.co/settings/tokens)
-3. Click **New token**
-   - Name: `kaggle-threadcraft`
-   - Type/role: **Write** (you need write access to push the cleaned dataset and later the trained model)
-4. Copy the token (starts with `hf_...`) — you won't be able to see it again, but you can always generate a new one.
+2. **Settings → Access Tokens** (https://huggingface.co/settings/tokens)
+3. **New token** → name `kaggle-threadcraft`, role **Write** (write access is required to push
+   the cleaned datasets and trained models)
+4. Copy the `hf_...` value — you can't view it again, but you can always generate a new one
 
-**Never paste this token directly into a notebook cell.** Kaggle notebooks are commonly made public (or accidentally left public), and a leaked write token lets anyone push/delete under your HF account. It goes into a Kaggle **Secret** instead (next step).
+**Never paste this token into a notebook cell.** Kaggle notebooks are frequently public (or
+accidentally left public), and a leaked write token lets anyone push to or delete from your HF
+account. It goes into a Kaggle Secret instead — step 3.
 
-## 2. Set up Kaggle
+Also note your **HF username** (https://huggingface.co/settings/profile) — it is not necessarily
+the same as your Kaggle username, and every notebook's `HF_USERNAME` config must be set to it.
+
+## 2. Kaggle account + phone verification
 
 1. Sign up / log in at https://kaggle.com
-2. **Verify your phone number**: Settings → Phone Verification. This is required before Kaggle will give you GPU access *or* internet access inside a notebook — both of which this project needs. Do this first; it can take a few minutes to process.
-3. Create a new notebook: **Create → New Notebook**, or upload the provided one: **File → Import Notebook** → upload `ml/notebooks/01_dataset_prep_and_clean.ipynb` from this repo.
+2. **Settings → Phone Verification.** This is required before Kaggle grants GPU access *or*
+   internet access inside a notebook — this project needs both. Do it first; it can take a few
+   minutes to process.
+3. Upload a notebook: **Create → New Notebook**, then **File → Import Notebook**, and pick the
+   `.ipynb` from this repo.
 4. In the notebook's right sidebar:
-   - **Accelerator**: set to **GPU T4 x2** (not P100 — same weekly quota cost, but T4 supports fp16 mixed-precision training, which is meaningfully faster)
-   - **Internet**: toggle **ON** (needed to `pip install`, download from the HF Hub, and push back to it)
+   - **Accelerator** — see the table above. For the classifier training notebook choose
+     **GPU T4 x2**, not P100: same weekly quota cost, but T4 has fp16 tensor cores and the
+     notebook sets `fp16=True`. (T4 does **not** support bf16 — don't switch it.)
+   - **Internet** — **On** for all four (needed for `pip install`, HF downloads, and pushes)
 
-## 3. Add your HF token as a Kaggle Secret
+## 3. Add the HF token as a Kaggle Secret
 
 1. In the notebook editor: **Add-ons → Secrets**
-2. Click **Add a new secret**
-   - Label: `HF_TOKEN`
-   - Value: paste the `hf_...` token from step 1
-3. Make sure the toggle next to `HF_TOKEN` is **on** ("Attached") for this notebook — secrets are per-notebook, you must attach it every time you create a new one.
+2. **Add a new secret** — Label `HF_TOKEN`, Value = your `hf_...` token
+3. Make sure the toggle next to `HF_TOKEN` is **on/attached for this notebook**
 
-The notebook reads it with:
+Secrets are **per notebook**, so you must attach it again in each of the four. The notebooks read
+it with:
+
 ```python
 from kaggle_secrets import UserSecretsClient
 HF_TOKEN = UserSecretsClient().get_secret("HF_TOKEN")
 ```
 
-## 4. Fill in your HF username
+(They fall back to an `HF_TOKEN` environment variable if you run them outside Kaggle.)
 
-At the top of the notebook, change:
+## 4. Set your username
+
+At the top of each notebook:
+
 ```python
 HF_USERNAME = "your-hf-username"  # <-- CHANGE THIS
 ```
-to your actual Hugging Face username (find it at https://huggingface.co/settings/profile — it's *not* necessarily the same as your Kaggle username).
 
-## 5. Run it properly (headless, survives closing the browser)
+## 5. Run headlessly — do not click through cells
 
-Don't just click through cells interactively — **interactive sessions die if you close the tab or go idle**, and you'll lose GPU-hours without a finished result. Instead:
+Interactive sessions die when you close the tab or go idle, and you lose the GPU hours with
+nothing to show for them. Instead:
 
-1. Click **Save Version** (top right)
-2. Choose **Save & Run All (Commit)**
-3. Kaggle re-runs the entire notebook top-to-bottom in a fresh, isolated container in the background. You can close the browser — it keeps running.
-4. Check back under **Your Work → Notebooks → [this notebook] → Output** for the commit status (success/failure) and any files written to `/kaggle/working/`.
+1. **Save Version** (top right)
+2. **Save & Run All (Commit)**
+3. Kaggle re-runs the whole notebook top-to-bottom in a fresh container in the background. Close
+   the browser if you like.
+4. Check **Your Work → Notebooks → [notebook] → Output** for status and any written files
 
-If it fails partway through (e.g. the push step, due to a network blip), **you keep the outputs from every cell that succeeded before the failure** — `/kaggle/working` persists across a commit. Re-run just the failed portion rather than the whole notebook if that happens.
+`/kaggle/working` persists across a commit, so if a late cell fails (e.g. the Hub push) the
+earlier outputs survive — every push cell in these notebooks is wrapped in `try/except` with a
+local fallback for exactly that reason. Re-run just the push cell rather than the whole notebook.
 
-## 6. Verify the result
+## 6. Run order and what you should see
 
-Once it succeeds, check:
-- https://huggingface.co/datasets/`<your-username>`/threadcraft-fashion-cleaned — the cleaned dataset should be there with `train`/`validation`/`test` splits
-- The `label2id.json` file should be listed in the repo's Files tab
+```
+classifier/01  ->  pushes  <user>/threadcraft-garments-cleaned   (dataset)
+classifier/02  ->  pushes  <user>/threadcraft-garment-classifier (model)
 
-## 7. Weekly GPU quota — budget it
+fit-recommender/01  ->  pushes  <user>/threadcraft-fit-cleaned      (dataset)
+fit-recommender/02  ->  pushes  <user>/threadcraft-fit-recommender  (model)
+```
 
-Kaggle gives **~30 GPU-hours/week** (resets weekly), sessions capped at **12 hours**. The dataset-cleaning notebook above needs no GPU at all (it's pure data wrangling) — only run it with the **CPU** accelerator to save your GPU quota for the actual model training notebook that comes next.
+Each `02` notebook finishes by **downloading back what it just pushed** and running a prediction,
+so a successful final cell means the artefact is genuinely usable — not merely uploaded.
+
+## 7. Weekly GPU quota
+
+Kaggle gives roughly **30 GPU-hours per week**, sessions capped at 12 hours. Only
+`classifier/02_train.ipynb` needs a GPU (25–50 min), so a full end-to-end run costs well under an
+hour of quota. Running the other three on GPU by mistake is the main way to waste it.
 
 ## Common errors
 
 | Error | Cause | Fix |
 |---|---|---|
-| `Secret HF_TOKEN not found` | Secret not attached to this specific notebook | Add-ons → Secrets → toggle it on for this notebook |
-| `401 Unauthorized` pushing to HF | Token has read-only role, or expired | Generate a new token with **Write** role, update the Kaggle secret |
-| GPU option greyed out | Phone not verified yet | Settings → Phone Verification, wait a few minutes, refresh |
-| `No internet access` / pip install fails | Internet toggle is off | Notebook sidebar → Internet → ON |
-| Notebook stops when you close the tab | You ran cells interactively instead of committing | Use **Save & Run All (Commit)**, not manual cell execution, for anything you want to survive |
+| `Secret HF_TOKEN not found` | Secret not attached to *this* notebook | Add-ons → Secrets → toggle it on |
+| `401 Unauthorized` on push | Token is read-only, or expired | New token with **Write** role, update the secret |
+| GPU option greyed out | Phone not verified | Settings → Phone Verification, wait, refresh |
+| `pip install` / download fails | Internet toggle off | Sidebar → Internet → On |
+| Notebook stops when you close the tab | Ran cells manually | Use **Save & Run All (Commit)** |
+| `CUDA out of memory` | Batch too large for the T4 | Drop `BATCH_SIZE` from 64 to 32 in `classifier/02` |
+| `RepositoryNotFoundError` on the cleaned dataset | `01` hasn't been run, or `HF_USERNAME` differs between the two notebooks | Run `01` first; check the username matches exactly |

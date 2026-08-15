@@ -1,11 +1,16 @@
 # ml/data/
 
-Raw and intermediate datasets are **not** committed to this repo (see `.gitignore`) — they're pulled directly from the Hugging Face Hub inside the notebooks in `ml/notebooks/`.
+**No datasets are committed to this repo** (see the root `.gitignore`). Everything is pulled at
+runtime by the notebooks in `ml/classifier/` and `ml/fit-recommender/`.
 
-| Dataset | Source | Role |
+| Dataset | Where it comes from | Used by |
 |---|---|---|
-| `ashraq/fashion-product-images-small` | HF Hub (mirror of Kaggle `paramaggarwal/fashion-product-images-small`) | Raw input to the garment category classifier |
-| `<your-hf-username>/threadcraft-fashion-cleaned` | Pushed by `01_dataset_prep_and_clean.ipynb` | Cleaned, stratified-split version consumed by the training notebook |
-| RentTheRunway split of `rmisra/clothing-fit-dataset-for-size-recommendation` | McAuley Lab direct download (bypasses Kaggle) | Size/fit recommender training data |
+| `ashraq/fashion-product-images-small` | Hugging Face Hub — 44,072 rows, MIT, no credentials needed | classifier · `01_data_cleaning` |
+| `<your-user>/threadcraft-garments-cleaned` | Produced by classifier `01`, consumed by classifier `02` | classifier · `02_train` |
+| RentTheRunway (Clothing Fit, Misra et al. 2018) | Direct HTTPS from the UCSD McAuley Lab — 192,544 rows, CC BY 4.0, no login | fit-recommender · `01_data_cleaning` |
+| `<your-user>/threadcraft-fit-cleaned` | Produced by fit-recommender `01`, consumed by fit-recommender `02` | fit-recommender · `02_train` |
 
-See `docs/deployment/kaggle-huggingface-guide.md` for how to run the notebooks that produce these.
+Setup: [`docs/deployment/kaggle-huggingface-guide.md`](../../docs/deployment/kaggle-huggingface-guide.md)
+
+If you do download data here for local experimentation, it stays untracked — the `.gitignore`
+rule is `ml/data/*` with an exception for this README.
