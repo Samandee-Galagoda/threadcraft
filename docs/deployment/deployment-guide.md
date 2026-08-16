@@ -95,9 +95,15 @@ The start command runs `alembic upgrade head && python -m app.db.seed` before uv
 
 5. **Deploy**
 
+6. **Turn off Deployment Protection.** Vercel → Project → **Settings → Deployment Protection** → set **Vercel Authentication** to **Disabled**, then Save.
+
+   Left on, every visitor is bounced to a Vercel login page — including your marker. It is on by default for new projects and gives a `302` to `vercel.com/sso-api`, which looks like a broken deploy rather than a permission setting.
+
+7. Note your **production domain** from Project → Domains. It is the short one (`threadcraft-<scope>.vercel.app`), not the long per-deployment hash URL — the hash changes on every push, so pinning CORS to it will break at the next commit.
+
 > **`VITE_*` variables are inlined at build time.** Changing `VITE_API_URL` in the dashboard does nothing until you **redeploy**. This is the single most common confusion here.
 
-6. Go back to Render → **Environment** and set **three** variables to your real Vercel URL:
+8. Go back to Render → **Environment** and set **three** variables to that production domain:
 
 | Name | Value | Why |
 |---|---|---|
@@ -151,8 +157,9 @@ Then sign in as your admin, open `/admin`, and check **Settings → System healt
 | Symptom | Cause | Fix |
 |---|---|---|
 | Frontend loads, every API call fails | `VITE_API_URL` wrong or not baked in | Check it's set, then **redeploy** — build-time only |
-| CORS error in the browser console | Vercel URL not in `CORS_ORIGINS` | Set the exact origin. A bare URL, a comma-separated list and a JSON array are all accepted |
+| CORS error in the browser console | Vercel URL not in `CORS_ORIGINS` | `curl https://YOUR-API.onrender.com/health` reports the **effective** origin list. Set the exact origin; a bare URL, a comma-separated list and a JSON array are all accepted |
 | Deploy crash-loops with `SettingsError: error parsing value for field "cors_origins"` | An older build required strict JSON | Fixed — any of the three spellings now works. Redeploy |
+| Vercel URL redirects to a Vercel login page | Deployment Protection is on | Vercel → Project → Settings → **Deployment Protection** → set Vercel Authentication to **Disabled**. Otherwise only you can open the site |
 | Refreshing `/design` gives 404 | Missing SPA rewrite | `frontend/vercel.json` handles this — confirm Root Directory is `frontend` |
 | First request takes ~50 s | Free-tier cold start | Expected. Set up keep-warm; pre-warm before a demo |
 | `psycopg2` / SSL errors on boot | Scheme or endpoint wrong | Must be `postgresql+psycopg2://`, pooled endpoint, `?sslmode=require` |
