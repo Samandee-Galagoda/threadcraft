@@ -37,6 +37,32 @@ def mask(value: str) -> str:
     return f"{value[:4]}…{value[-4:]} ({len(value)} chars)" if len(value) > 12 else "(set)"
 
 
+def validate_account_id(account_id: str) -> str | None:
+    """Return a problem description, or None if the id looks well-formed.
+
+    A Cloudflare account id is exactly 32 hexadecimal characters. Checking the
+    shape locally turns a mystifying 404 — which could equally mean a wrong id,
+    a disabled model, or a region issue — into a precise message. A single
+    character dropped while copying is the common case and is otherwise very
+    hard to spot by eye.
+    """
+    if not account_id:
+        return "Account ID is empty."
+    if any(c.isspace() for c in account_id):
+        return "Account ID contains whitespace — check for a stray space or newline."
+    if len(account_id) != 32:
+        direction = "short" if len(account_id) < 32 else "long"
+        return (
+            f"Account ID is {len(account_id)} characters, expected 32 — "
+            f"it looks {direction} by {abs(32 - len(account_id))}. "
+            "A character was probably lost while copying; re-copy the whole value."
+        )
+    if not all(c in "0123456789abcdefABCDEF" for c in account_id):
+        bad = sorted({c for c in account_id if c not in "0123456789abcdefABCDEF"})
+        return f"Account ID should be hexadecimal, but contains: {bad}"
+    return None
+
+
 def read_env() -> dict:
     values = {}
     if ENV_PATH.exists():
@@ -138,14 +164,19 @@ def main() -> int:
         if not account_id or not api_token:
             print("\nBoth are required. Run without --check to set them up.")
             return 1
+        problem = validate_account_id(account_id)
+        if problem:
+            print(f"\n✗ {problem}")
+            return 1
         print("\nGenerating a test image…")
         data, error = generate(account_id, api_token)
     else:
         print(__doc__.split("Where to get")[1].strip().join(["Where to get", ""]))
         print()
         account_id = input("CF_ACCOUNT_ID: ").strip()
-        if not account_id:
-            print("Account ID is required.")
+        problem = validate_account_id(account_id)
+        if problem:
+            print(f"\n✗ {problem}")
             return 1
         api_token = getpass.getpass("CF_API_TOKEN (hidden): ").strip()
         if not api_token:
