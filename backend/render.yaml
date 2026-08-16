@@ -1,0 +1,76 @@
+# Render Blueprint for the ThreadCraft API.
+#
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repo.
+# Render reads this file and provisions the service; you then fill in the
+# env vars marked `sync: false` in the dashboard.
+#
+# Free tier notes:
+#   - The instance sleeps after 15 minutes with no traffic, and takes ~50 s to
+#     wake. .github/workflows/keep-warm.yml pings /health to prevent that.
+#   - 750 instance-hours/month, which is roughly one always-on service.
+#   - The filesystem is ephemeral: anything written to disk is lost on redeploy.
+#     That's why generated mockups and uploads should go to R2 in production
+#     (the app falls back to local disk, which works but doesn't survive a
+#     restart).
+
+services:
+  - type: web
+    name: threadcraft-api
+    runtime: python
+    plan: free
+    region: singapore # closest region to Sri Lanka
+    rootDir: backend
+    # Python 3.13 to match the local venv. An unpinned build would pick a
+    # different version than everything was developed and tested against.
+    buildCommand: pip install -r requirements-ml.txt
+    # Migrate and seed on boot rather than via preDeployCommand, which is not
+    # available on the free plan. Both are idempotent: alembic no-ops when the
+    # schema is current, and the seed script exits early if a catalogue already
+    # exists, so restarts never duplicate data.
+    startCommand: >-
+      alembic upgrade head &&
+      python -m app.db.seed &&
+      uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.9"
+      - key: ENV
+        value: prod
+      # Paste the Neon pooled connection string, converted to the
+      # postgresql+psycopg2:// scheme. See docs/deployment/deployment-guide.md.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true # Render generates a strong random value
+      # Your Vercel URL(s), as a JSON array, e.g.
+      #   ["https://threadcraft.vercel.app"]
+      - key: CORS_ORIGINS
+        sync: false
+      # Allows every Vercel preview deployment for this project to call the API.
+      - key: CORS_ORIGIN_REGEX
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: DEMO_EMAIL
+        value: demo@threadcraft.lk
+      - key: DEMO_PASSWORD
+        sync: false
+      # --- Trained models (optional but recommended) ---
+      - key: HF_USERNAME
+        value: SamaGalagoda
+      - key: ML_ENABLED
+        value: "true"
+      # The ViT classifier needs torch (~800 MB) — too large for the free
+      # instance. Leave false unless you upgrade the plan.
+      - key: ML_ENABLE_CLASSIFIER
+        value: "false"
+      # --- AI mockups (optional; falls back to a placeholder) ---
+      - key: CF_ACCOUNT_ID
+        sync: false
+      - key: CF_API_TOKEN
+        sync: false
+      - key: HF_TOKEN
+        sync: false
