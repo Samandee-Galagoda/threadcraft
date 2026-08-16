@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_optional_user
@@ -11,6 +11,7 @@ from app.models.settings import AppSetting
 from app.models.user import User
 from app.schemas.order import OrderCreate, OrderOut
 from app.services import catalog as catalog_service
+from app.services import email as email_service
 from app.services import orders as orders_service
 from app.services.pricing import calculate_price
 
@@ -25,6 +26,7 @@ def _setting(db: Session, key: str, default: str) -> str:
 @router.post("", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
 def create_order(
     payload: OrderCreate,
+    background_tasks: BackgroundTasks,
     current_user: User | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
@@ -111,6 +113,11 @@ def create_order(
 
     db.commit()
     db.refresh(order)
+
+    # Queued rather than awaited: a slow or unreachable email provider must not
+    # delay the response to a customer who has just placed an order.
+    background_tasks.add_task(email_service.send_order_confirmation, order, order.mockup_url)
+
     return order
 
 
