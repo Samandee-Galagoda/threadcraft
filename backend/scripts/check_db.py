@@ -55,8 +55,7 @@ def diagnose(url: str) -> list[str]:
 
     if url.startswith("postgresql://") or url.startswith("postgres://"):
         problems.append(
-            "Scheme is missing the driver. SQLAlchemy needs "
-            "'postgresql+psycopg2://', not 'postgresql://'."
+            "Scheme is missing the driver. SQLAlchemy needs 'postgresql+psycopg2://', not 'postgresql://'."
         )
 
     if "YOUR_PASSWORD" in url or "<" in url or ">" in url:

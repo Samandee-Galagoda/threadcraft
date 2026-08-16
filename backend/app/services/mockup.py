@@ -52,8 +52,37 @@ def _find_cached(db: Session, key: str) -> MockupGeneration | None:
     )
 
 
+# FLUX.1-schnell on Workers AI accepts exactly these properties and rejects the
+# request outright if it sees anything else — `{"code": 5006, "message":
+# "Additional or unevaluated properties ... not allowed"}`. Notably it does NOT
+# accept `negative_prompt` (unlike the Hugging Face route below), and the steps
+# parameter is `steps`, not `num_steps`.
+CLOUDFLARE_ALLOWED_KEYS = {"prompt", "steps", "seed"}
+CLOUDFLARE_MAX_PROMPT_CHARS = 2048
+CLOUDFLARE_DEFAULT_STEPS = 4  # schnell's default; max is 8
+
+
+def build_cloudflare_payload(prompt: str, steps: int = CLOUDFLARE_DEFAULT_STEPS) -> dict:
+    """Build the request body, restricted to properties the API accepts.
+
+    Kept separate from the HTTP call so it can be unit-tested — a stray key here
+    fails the whole request and silently degrades every mockup to the fallback.
+    """
+    payload = {
+        "prompt": prompt[:CLOUDFLARE_MAX_PROMPT_CHARS],
+        "steps": max(1, min(int(steps), 8)),
+    }
+    assert set(payload) <= CLOUDFLARE_ALLOWED_KEYS, "unsupported Workers AI property"
+    return payload
+
+
 def _generate_cloudflare(prompt: str, negative: str) -> bytes | None:
-    """Cloudflare Workers AI. Returns raw image bytes, or None if unavailable."""
+    """Cloudflare Workers AI. Returns raw image bytes, or None if unavailable.
+
+    `negative` is accepted for interface symmetry with the Hugging Face path but
+    deliberately unused: FLUX.1-schnell on Workers AI has no negative-prompt
+    support, and sending one is a hard 400.
+    """
     if not (settings.cf_account_id and settings.cf_api_token):
         return None
 
@@ -61,9 +90,7 @@ def _generate_cloudflare(prompt: str, negative: str) -> bytes | None:
         f"https://api.cloudflare.com/client/v4/accounts/"
         f"{settings.cf_account_id}/ai/run/{settings.cf_image_model}"
     )
-    payload = {"prompt": prompt, "num_steps": 4}
-    if negative:
-        payload["negative_prompt"] = negative
+    payload = build_cloudflare_payload(prompt)
 
     try:
         with httpx.Client(timeout=settings.mockup_timeout_seconds) as client:
