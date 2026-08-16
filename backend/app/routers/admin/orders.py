@@ -5,14 +5,14 @@ from app.core.deps import require_admin
 from app.db.session import get_db
 from app.models.order import Order
 from app.models.user import User
-from app.schemas.order import OrderOut, OrderStatusUpdate
+from app.schemas.order import AdminOrderOut, OrderStatusUpdate
 from app.services import email as email_service
 from app.services.orders import InvalidStatusTransition, transition_status
 
 router = APIRouter(prefix="/api/admin/orders", tags=["admin:orders"], dependencies=[Depends(require_admin)])
 
 
-@router.get("", response_model=list[OrderOut])
+@router.get("", response_model=list[AdminOrderOut])
 def list_orders(status: str | None = None, db: Session = Depends(get_db)):
     query = db.query(Order)
     if status:
@@ -20,7 +20,7 @@ def list_orders(status: str | None = None, db: Session = Depends(get_db)):
     return query.order_by(Order.created_at.desc()).all()
 
 
-@router.get("/{order_id}", response_model=OrderOut)
+@router.get("/{order_id}", response_model=AdminOrderOut)
 def get_order(order_id: int, db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
@@ -28,7 +28,7 @@ def get_order(order_id: int, db: Session = Depends(get_db)):
     return order
 
 
-@router.patch("/{order_id}/status", response_model=OrderOut)
+@router.patch("/{order_id}/status", response_model=AdminOrderOut)
 def update_order_status(
     order_id: int,
     payload: OrderStatusUpdate,

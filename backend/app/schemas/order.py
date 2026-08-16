@@ -70,6 +70,24 @@ class OrderOut(BaseModel):
     created_at: datetime.datetime
 
 
+class AdminOrderOut(OrderOut):
+    """Admin view of an order.
+
+    Exposes the numeric primary key, which OrderOut deliberately omits: the
+    customer-facing surface identifies orders by `order_number` only, since a
+    sequential id is guessable and would let anyone enumerate other people's
+    orders through the public tracking endpoint. Admin routes are already
+    behind require_admin, and the status-update endpoint is keyed by id, so
+    without this the admin UI has no way to act on a listed order.
+    """
+
+    id: int
+    guest_email: str | None = None
+    guest_name: str | None = None
+    custom_description: str | None = None
+    updated_at: datetime.datetime | None = None
+
+
 class SavedDesignCreate(BaseModel):
     name: str
     cloth_type_id: int | None = None

@@ -79,3 +79,21 @@ class ClothTypeOut(BaseModel):
     production_days: int
     measurement_fields: list[MeasurementFieldOut]
     option_groups: list[DesignOptionGroupOut]
+
+
+class AdminClothTypeOut(ClothTypeOut):
+    """Admin view of a cloth type.
+
+    Adds the pricing inputs and the active flag. None of these belong on the
+    customer surface: `is_active` is meaningless there because the public
+    catalogue endpoint already filters inactive rows out, and the cost
+    components would let a client reconstruct — and therefore dispute or
+    forge — a quote that the server computes deliberately on its own.
+    """
+
+    is_active: bool
+    base_stitching_cost: Decimal
+    base_fabric_metres: Decimal
+    reference_body_cm: Decimal
+    ai_prompt_noun: str
+    sort_order: int
