@@ -1,7 +1,9 @@
+import json
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -19,11 +21,49 @@ class Settings(BaseSettings):
 
     # CORS — explicit origin list; never "*" (this app uses Bearer auth, not cookies,
     # so allow_credentials stays False and a wildcard origin is unnecessary anyway)
-    cors_origins: list[str] = ["http://localhost:5173"]
+    #
+    # NoDecode disables pydantic-settings' automatic JSON parsing of this field
+    # so the validator below sees the raw string. Without it, a CORS_ORIGINS
+    # that isn't valid JSON raises SettingsError while Settings is being
+    # constructed — which happens at import time, so the process exits before
+    # the app starts and the only symptom is a crash-looping deploy. Pasting a
+    # bare URL into a hosting dashboard is the obvious thing to do and is
+    # exactly what triggers it, so the field accepts all three sane spellings:
+    #   ["https://a.app","https://b.app"]   JSON array
+    #   https://a.app, https://b.app        comma-separated
+    #   https://a.app                       a single origin
+    cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
     # Vercel gives every preview deployment its own hostname, so they can't be
     # enumerated in the list above. A regex covers them, e.g.
     #   https://threadcraft-.*\.vercel\.app
     cors_origin_regex: str | None = None
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, value):
+        """Accept a JSON array, a comma-separated list, or a single origin.
+
+        Trailing slashes are stripped because CORS matching is on the exact
+        origin: "https://app.vercel.app/" never matches the browser's
+        "https://app.vercel.app", and the resulting failure looks like a
+        server bug rather than a typo in a dashboard field.
+        """
+        if value is None or isinstance(value, list):
+            origins = value or []
+        else:
+            text = str(value).strip()
+            if text.startswith("["):
+                try:
+                    origins = json.loads(text)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        f"CORS_ORIGINS looks like JSON but could not be parsed: {exc}. "
+                        'Expected e.g. ["https://your-app.vercel.app"]'
+                    ) from exc
+            else:
+                origins = text.split(",")
+
+        return [origin.strip().rstrip("/") for origin in origins if str(origin).strip()]
 
     # AI mockup generation
     cf_account_id: str | None = None
