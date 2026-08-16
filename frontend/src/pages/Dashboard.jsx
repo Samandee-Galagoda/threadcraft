@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { dashboard as dashboardApi, measurements as measurementsApi } from '../api';
+import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
@@ -19,33 +21,13 @@ export default function Dashboard() {
   });
 
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const fetchDashboardData = useCallback(async () => {
-    const token = localStorage.getItem('tc_token');
-    if (!token) {
-      navigate('/auth');
-      return;
-    }
-
     try {
-      const response = await fetch('http://localhost:8000/api/dashboard', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.status === 401) {
-        localStorage.removeItem('tc_token');
-        localStorage.removeItem('tc_user');
-        navigate('/auth');
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error('Failed to retrieve dashboard information.');
-      }
-
-      const result = await response.json();
+      // A 401 is handled centrally by the API client, which clears the session
+      // and redirects — no need to duplicate that here.
+      const result = await dashboardApi.load();
       setData(result);
       if (result.measurements) {
         setMeasForm({
@@ -62,20 +44,18 @@ export default function Dashboard() {
       setLoading(false);
     } catch (err) {
       console.error(err);
-      setError('Could not establish a connection to the server. Please ensure XAMPP is running and the backend server is active.');
+      setError(err.message || 'Could not reach the server. Please try again shortly.');
       setLoading(false);
     }
-  }, [navigate]);
+  }, []);
 
   useEffect(() => {
-    // Fetch-on-mount: replaced by the src/api + useApi data layer in a later PR.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDashboardData();
   }, [fetchDashboardData]);
 
   const handleSignOut = () => {
-    localStorage.removeItem('tc_token');
-    localStorage.removeItem('tc_user');
+    logout();
     navigate('/');
   };
 
@@ -89,24 +69,8 @@ export default function Dashboard() {
 
   const handleMeasSubmit = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('tc_token');
-    if (!token) return;
-
     try {
-      const response = await fetch('http://localhost:8000/api/measurements', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(measForm)
-      });
-
-      if (!response.ok) {
-        throw new Error('Could not save measurements.');
-      }
-
-      const updatedMeas = await response.json();
+      const updatedMeas = await measurementsApi.save(measForm);
       setData(prev => ({
         ...prev,
         measurements: updatedMeas,
@@ -115,7 +79,7 @@ export default function Dashboard() {
       setIsEditingMeas(false);
     } catch (err) {
       console.error(err);
-      alert('Error updating measurements. Please try again.');
+      alert(err.message || 'Error updating measurements. Please try again.');
     }
   };
 
