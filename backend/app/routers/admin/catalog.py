@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.deps import require_admin
 from app.db.session import get_db
 from app.models.catalog import ClothType, MeasurementField
-from app.schemas.catalog import ClothTypeOut, MeasurementFieldOut
+from app.schemas.catalog import AdminClothTypeOut, MeasurementFieldOut
 
 router = APIRouter(prefix="/api/admin/catalog", tags=["admin:catalog"], dependencies=[Depends(require_admin)])
 
@@ -58,7 +58,7 @@ class MeasurementFieldCreate(BaseModel):
     sort_order: int = 0
 
 
-@router.get("/cloth-types", response_model=list[ClothTypeOut])
+@router.get("/cloth-types", response_model=list[AdminClothTypeOut])
 def admin_list_cloth_types(db: Session = Depends(get_db)):
     return (
         db.query(ClothType)
@@ -68,7 +68,7 @@ def admin_list_cloth_types(db: Session = Depends(get_db)):
     )
 
 
-@router.post("/cloth-types", response_model=ClothTypeOut, status_code=201)
+@router.post("/cloth-types", response_model=AdminClothTypeOut, status_code=201)
 def create_cloth_type(payload: ClothTypeCreate, db: Session = Depends(get_db)):
     if db.query(ClothType).filter(ClothType.slug == payload.slug).first():
         raise HTTPException(status_code=400, detail="A cloth type with this slug already exists")
@@ -79,7 +79,7 @@ def create_cloth_type(payload: ClothTypeCreate, db: Session = Depends(get_db)):
     return cloth_type
 
 
-@router.patch("/cloth-types/{cloth_type_id}", response_model=ClothTypeOut)
+@router.patch("/cloth-types/{cloth_type_id}", response_model=AdminClothTypeOut)
 def update_cloth_type(cloth_type_id: int, payload: ClothTypeUpdate, db: Session = Depends(get_db)):
     cloth_type = db.query(ClothType).filter(ClothType.id == cloth_type_id).first()
     if not cloth_type:

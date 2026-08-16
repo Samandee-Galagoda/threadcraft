@@ -93,4 +93,35 @@ export const ml = {
   status: () => api.get('/api/ml/status', { auth: false }),
 };
 
+// ── Admin ─────────────────────────────────────────────────────────────────
+export const admin = {
+  analytics: (days = 30) => api.get(`/api/admin/analytics?days=${days}`),
+  revenue: (days = 30) => api.get(`/api/admin/analytics/revenue?days=${days}`),
+
+  orders: (status) =>
+    api.get(`/api/admin/orders${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  updateOrderStatus: (orderId, status, note) =>
+    api.patch(`/api/admin/orders/${orderId}/status`, { status, note }),
+  emailStatus: () => api.get('/api/admin/orders/email-status'),
+
+  materials: () => api.get('/api/admin/inventory/materials'),
+  lowStock: () => api.get('/api/admin/inventory/low-stock'),
+  updateStock: (materialId, stockMetres) =>
+    api.patch(`/api/admin/inventory/materials/${materialId}/stock`, {
+      stock_metres: stockMetres,
+    }),
+
+  clothTypes: () => api.get('/api/admin/catalog/cloth-types'),
+  createClothType: (payload) => api.post('/api/admin/catalog/cloth-types', payload),
+  updateClothType: (id, payload) => api.patch(`/api/admin/catalog/cloth-types/${id}`, payload),
+  deactivateClothType: (id) => api.del(`/api/admin/catalog/cloth-types/${id}`),
+  addMeasurementField: (clothTypeId, payload) =>
+    api.post(`/api/admin/catalog/cloth-types/${clothTypeId}/measurement-fields`, payload),
+  deleteMeasurementField: (fieldId) =>
+    api.del(`/api/admin/catalog/measurement-fields/${fieldId}`),
+
+  settings: () => api.get('/api/admin/settings'),
+  updateSetting: (key, value) => api.put(`/api/admin/settings/${key}`, { value }),
+};
+
 export { ApiError, mediaUrl } from './client';
