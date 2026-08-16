@@ -19,6 +19,44 @@ engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": 
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+@pytest.fixture(autouse=True, scope="session")
+def isolate_from_developer_env():
+    """Force external integrations off for the whole test session.
+
+    Settings are loaded from .env, so without this the suite behaves
+    differently depending on what the developer happens to have configured —
+    and once real model repos are set it will actually download hundreds of
+    megabytes from the Hugging Face Hub mid-test.
+
+    CI must exercise the graceful-degradation path anyway, since that is what
+    protects the deployed app when a provider is cold or rate-limited.
+    """
+    from app.core.config import settings
+    from app.services import ml as ml_service
+
+    original = {
+        "ml_enabled": settings.ml_enabled,
+        "hf_username": settings.hf_username,
+        "hf_classifier_model": settings.hf_classifier_model,
+        "hf_measurement_model": settings.hf_measurement_model,
+        "hf_fit_model": settings.hf_fit_model,
+        "cf_account_id": settings.cf_account_id,
+        "cf_api_token": settings.cf_api_token,
+        "hf_token": settings.hf_token,
+    }
+    for key in original:
+        setattr(settings, key, False if key == "ml_enabled" else None)
+
+    # Drop anything a previous run cached, so state can't leak between tests.
+    ml_service._cache.clear()
+    ml_service._failures.clear()
+
+    yield
+
+    for key, value in original.items():
+        setattr(settings, key, value)
+
+
 @pytest.fixture()
 def db_session():
     Base.metadata.create_all(bind=engine)

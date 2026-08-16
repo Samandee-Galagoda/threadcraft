@@ -61,7 +61,9 @@ def generate(account_id: str, api_token: str, model: str = DEFAULT_MODEL):
             response = client.post(
                 url,
                 headers={"Authorization": f"Bearer {api_token}"},
-                json={"prompt": TEST_PROMPT, "num_steps": 4},
+                # `steps`, not `num_steps`, and no negative_prompt — Workers AI
+                # rejects any unrecognised property with a 400.
+                json={"prompt": TEST_PROMPT, "steps": 4},
             )
     except Exception as exc:
         return None, f"Request failed: {type(exc).__name__}: {exc}"
@@ -74,11 +76,15 @@ def generate(account_id: str, api_token: str, model: str = DEFAULT_MODEL):
         return None, "403 Forbidden — token valid but missing `Workers AI - Edit` permission."
     if response.status_code == 404:
         return None, (
-            f"404 Not Found — check the Account ID, or the model id ({model}) "
-            "is unavailable on your account."
+            f"404 Not Found — check the Account ID, or the model id ({model}) is unavailable on your account."
         )
     if response.status_code == 429:
         return None, "429 Rate limited — daily free neuron allowance may be exhausted."
+    if response.status_code == 400:
+        return None, (
+            f"400 Bad input — the model rejected the request body. Credentials are "
+            f"fine (this is past auth). Response: {response.text[:250]}"
+        )
     if response.status_code != 200:
         return None, f"HTTP {response.status_code}: {response.text[:300]}"
 
