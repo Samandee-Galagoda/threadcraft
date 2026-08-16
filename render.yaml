@@ -1,8 +1,10 @@
 # Render Blueprint for the ThreadCraft API.
 #
 # Deploy: Render dashboard -> New -> Blueprint -> pick this repo.
-# Render reads this file and provisions the service; you then fill in the
-# env vars marked `sync: false` in the dashboard.
+# Render looks for render.yaml at the REPOSITORY ROOT, which is why this lives
+# here rather than under backend/ despite only describing the API. rootDir
+# below points Render at the backend directory for build and run.
+# Fill in the env vars marked `sync: false` in the dashboard.
 #
 # Free tier notes:
 #   - The instance sleeps after 15 minutes with no traffic, and takes ~50 s to

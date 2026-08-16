@@ -44,7 +44,8 @@ Use the **pooled** endpoint (the one with `-pooler`), not the direct one — Ren
 ## 2. API — Render (~20 min)
 
 1. Sign up at <https://render.com> with GitHub
-2. **New → Blueprint**, pick the `threadcraft` repo. Render reads `backend/render.yaml`.
+2. **New → Blueprint**, pick the `threadcraft` repo. Render reads `render.yaml` from the
+   repository root and leaves **Blueprint Path** blank.
 3. Fill in the env vars it prompts for:
 
 | Variable | Value |
