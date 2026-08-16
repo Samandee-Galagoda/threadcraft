@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { admin, ml, mockup } from '../../api';
+import { admin, ml, mockup, payments } from '../../api';
 
 /** Groups the pricing knobs so the page reads as "money" then "fit maths"
  *  rather than one alphabetical list of opaque keys. */
@@ -50,7 +50,8 @@ export default function AdminSettings() {
       admin.emailStatus().catch(() => null),
       mockup.status().catch(() => null),
       ml.status().catch(() => null),
-    ]).then(([email, image, models]) => setHealth({ email, image, models }));
+      payments.status().catch(() => null),
+    ]).then(([email, image, models, pay]) => setHealth({ email, image, models, pay }));
   }, [load]);
 
   async function save(key) {
@@ -151,6 +152,18 @@ export default function AdminSettings() {
                   : health.image.will_use_fallback
                     ? 'No provider key — mockups use the deterministic placeholder.'
                     : `${health.image.cloudflare_configured ? 'Cloudflare Workers AI' : 'Hugging Face'} · storage: ${health.image.storage_backend}`
+              }
+            />
+            <Health
+              label="Payments"
+              ok={Boolean(health.pay?.configured)}
+              warn={Boolean(health.pay) && !health.pay.configured}
+              detail={
+                !health.pay
+                  ? 'Status endpoint unreachable.'
+                  : health.pay.configured
+                    ? 'Stripe test mode — card 4242 4242 4242 4242, any future expiry.'
+                    : 'Simulated — orders are marked paid without a charge. Do not demo this as a real payment.'
               }
             />
             <Health

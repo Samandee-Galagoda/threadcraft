@@ -93,6 +93,22 @@ export const ml = {
   status: () => api.get('/api/ml/status', { auth: false }),
 };
 
+// ── Payments ──────────────────────────────────────────────────────────────
+// Checkout is keyed by order number, never by an amount: the total charged is
+// the one the server already computed, so there is nothing here for a client
+// to tamper with.
+export const payments = {
+  checkout: (orderNumber) =>
+    api.post('/api/payments/checkout', { order_number: orderNumber }, { auth: false }),
+  verify: (orderNumber, sessionId) =>
+    api.post(
+      '/api/payments/verify',
+      { order_number: orderNumber, session_id: sessionId },
+      { auth: false },
+    ),
+  status: () => api.get('/api/payments/status', { auth: false }),
+};
+
 // ── Admin ─────────────────────────────────────────────────────────────────
 export const admin = {
   analytics: (days = 30) => api.get(`/api/admin/analytics?days=${days}`),

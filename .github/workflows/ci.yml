@@ -1,8 +1,11 @@
 name: CI
 
 on:
+  # No branch filter on pull_request: a stacked PR (one feature branch based on
+  # another) targets its parent branch rather than main, and with `branches:
+  # [main]` those PRs reported no checks at all — the exact case most in need of
+  # them, since the parent has not landed yet.
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
