@@ -51,7 +51,7 @@ Use the **pooled** endpoint (the one with `-pooler`), not the direct one — Ren
 | Variable | Value |
 |---|---|
 | `DATABASE_URL` | the `postgresql+psycopg2://…` string from step 1 |
-| `CORS_ORIGINS` | `["https://threadcraft.vercel.app"]` — **JSON array**, update after step 3 |
+| `CORS_ORIGINS` | `https://threadcraft.vercel.app` — update to your real Vercel URL after step 3 |
 | `CORS_ORIGIN_REGEX` | `https://threadcraft-.*\.vercel\.app` (allows preview deploys) |
 | `ADMIN_EMAIL` | your admin login |
 | `ADMIN_PASSWORD` | a real password — this seeds the admin account |
@@ -101,7 +101,7 @@ The start command runs `alembic upgrade head && python -m app.db.seed` before uv
 
 | Name | Value | Why |
 |---|---|---|
-| `CORS_ORIGINS` | `["https://YOUR-APP.vercel.app"]` | JSON array, exact origin, no trailing slash |
+| `CORS_ORIGINS` | `https://YOUR-APP.vercel.app` | A bare origin, a comma-separated list, or a JSON array all work |
 | `CHECKOUT_SUCCESS_URL` | `https://YOUR-APP.vercel.app/success` | Where Stripe returns after payment |
 | `CHECKOUT_CANCEL_URL` | `https://YOUR-APP.vercel.app/success` | Where Stripe returns if the customer backs out |
 
@@ -144,8 +144,6 @@ Open your Vercel URL and walk the journey:
 
 Then sign in as your admin, open `/admin`, and check **Settings → System health**: it reports which mode each integration is actually in. Simulated payments and console email are invisible from the customer UI, so this page is the only place they surface.
 
-Then sign in as your admin and advance an order's status; the tracking page should reflect it.
-
 ---
 
 ## Troubleshooting
@@ -153,7 +151,8 @@ Then sign in as your admin and advance an order's status; the tracking page shou
 | Symptom | Cause | Fix |
 |---|---|---|
 | Frontend loads, every API call fails | `VITE_API_URL` wrong or not baked in | Check it's set, then **redeploy** — build-time only |
-| CORS error in the browser console | Vercel URL not in `CORS_ORIGINS` | Set the exact origin, no trailing slash, JSON array |
+| CORS error in the browser console | Vercel URL not in `CORS_ORIGINS` | Set the exact origin. A bare URL, a comma-separated list and a JSON array are all accepted |
+| Deploy crash-loops with `SettingsError: error parsing value for field "cors_origins"` | An older build required strict JSON | Fixed — any of the three spellings now works. Redeploy |
 | Refreshing `/design` gives 404 | Missing SPA rewrite | `frontend/vercel.json` handles this — confirm Root Directory is `frontend` |
 | First request takes ~50 s | Free-tier cold start | Expected. Set up keep-warm; pre-warm before a demo |
 | `psycopg2` / SSL errors on boot | Scheme or endpoint wrong | Must be `postgresql+psycopg2://`, pooled endpoint, `?sslmode=require` |
