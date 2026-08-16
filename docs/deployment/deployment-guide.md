@@ -91,13 +91,23 @@ The start command runs `alembic upgrade head && python -m app.db.seed` before uv
 
 | Name | Value |
 |---|---|
-| `VITE_API_URL` | `https://YOUR-APP.onrender.com` — no trailing slash |
+| `VITE_API_URL` | `https://threadcraft-api-bczq.onrender.com` — no trailing slash |
 
 5. **Deploy**
 
 > **`VITE_*` variables are inlined at build time.** Changing `VITE_API_URL` in the dashboard does nothing until you **redeploy**. This is the single most common confusion here.
 
-6. Go back to Render and set `CORS_ORIGINS` to your real Vercel URL, e.g. `["https://threadcraft.vercel.app"]`. Render redeploys automatically.
+6. Go back to Render → **Environment** and set **three** variables to your real Vercel URL:
+
+| Name | Value | Why |
+|---|---|---|
+| `CORS_ORIGINS` | `["https://YOUR-APP.vercel.app"]` | JSON array, exact origin, no trailing slash |
+| `CHECKOUT_SUCCESS_URL` | `https://YOUR-APP.vercel.app/success` | Where Stripe returns after payment |
+| `CHECKOUT_CANCEL_URL` | `https://YOUR-APP.vercel.app/success` | Where Stripe returns if the customer backs out |
+
+The two `CHECKOUT_*` variables default to `localhost:5173`. Leaving them means Stripe sends a paying customer to a page that doesn't exist and **the payment is never confirmed** — the order sits at `pending` forever. This is silent: nothing in the UI reports it.
+
+Render redeploys automatically after each change.
 
 ---
 
@@ -109,7 +119,7 @@ Enable it: **GitHub repo → Settings → Secrets and variables → Actions → 
 
 | Name | Value |
 |---|---|
-| `API_URL` | `https://YOUR-APP.onrender.com` |
+| `API_URL` | `https://threadcraft-api-bczq.onrender.com` |
 
 Without the variable the job exits quietly instead of failing every 10 minutes.
 
@@ -128,8 +138,11 @@ Open your Vercel URL and walk the journey:
 5. Step 5 → prices are itemised and change with your choices
 6. Step 6 → a mockup appears
 7. Confirm → you land on `/success` with a real order number
-8. **Refresh that page** — it must still work (this is the SPA-rewrite check)
-9. `/track/YOUR-ORDER-NUMBER` shows the timeline
+8. Payment shows **paid** (simulated mode) or you're sent to Stripe Checkout and back
+9. **Refresh that page** — it must still work (this is the SPA-rewrite check)
+10. `/track/YOUR-ORDER-NUMBER` shows the timeline
+
+Then sign in as your admin, open `/admin`, and check **Settings → System health**: it reports which mode each integration is actually in. Simulated payments and console email are invisible from the customer UI, so this page is the only place they surface.
 
 Then sign in as your admin and advance an order's status; the tracking page should reflect it.
 
@@ -148,6 +161,8 @@ Then sign in as your admin and advance an order's status; the tracking page shou
 | `ModuleNotFoundError: dill` | Missing unpickle dependency | Already in `requirements-ml.txt` — confirm the build used it |
 | Mockups are always placeholders | No image provider configured | Set `CF_ACCOUNT_ID` + `CF_API_TOKEN`; check `/api/mockup/status` |
 | Uploaded images vanish after redeploy | Render's disk is ephemeral | Expected on free tier. Configure R2 for persistence, or accept it for the demo |
+| Order stays `pending` after paying | `CHECKOUT_SUCCESS_URL` still points at localhost | Set it to your Vercel `/success` URL and redeploy |
+| Admin → Settings shows "Payments: simulated" | No `STRIPE_SECRET_KEY` | Expected without a Stripe account. Orders are marked paid without a charge — never present this as a real payment |
 
 ---
 
