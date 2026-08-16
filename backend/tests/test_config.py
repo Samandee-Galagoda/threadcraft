@@ -49,3 +49,12 @@ def test_malformed_json_names_the_variable_and_the_expected_shape():
 
 def test_default_is_the_local_dev_origin():
     assert _settings().cors_origins == ["http://localhost:5173"]
+
+
+def test_health_reports_the_effective_cors_origins(client):
+    """A CORS misconfiguration is otherwise undiagnosable from outside: the API
+    answers every request correctly and only the browser rejects the response,
+    while the admin UI that would show the problem is itself blocked by it."""
+    body = client.get("/health").json()
+    assert body["status"] == "ok"
+    assert isinstance(body["cors"]["allowed_origins"], list)
