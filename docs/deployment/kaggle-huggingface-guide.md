@@ -1,16 +1,18 @@
 # Running the ML notebooks on Kaggle + Hugging Face
 
-Setup for the four notebooks in [`ml/`](../../ml/). Do steps 1–3 **once** — the same token and
+Setup for the six notebooks in [`ml/`](../../ml/). Do steps 1–3 **once** — the same token and
 secret work for every notebook.
 
 | Notebook | Accelerator | Internet | Roughly |
 |---|---|---|---|
 | `ml/classifier/01_data_cleaning.ipynb` | None (CPU) | On | few min |
 | `ml/classifier/02_train.ipynb` | **GPU T4 x2** | On | 25–50 min |
+| `ml/measurement-predictor/01_data_cleaning.ipynb` | None (CPU) | On | 1–2 min |
+| `ml/measurement-predictor/02_train.ipynb` | None (CPU) | On | 5–8 min |
 | `ml/fit-recommender/01_data_cleaning.ipynb` | None (CPU) | On | 2–3 min |
 | `ml/fit-recommender/02_train.ipynb` | None (CPU) | On | 3–5 min |
 
-Only one of the four needs a GPU. Run the other three on CPU to protect your weekly quota.
+Only one of the six needs a GPU. Run the other five on CPU to protect your weekly quota.
 
 ## 1. Hugging Face account + token
 
@@ -86,6 +88,9 @@ local fallback for exactly that reason. Re-run just the push cell rather than th
 classifier/01  ->  pushes  <user>/threadcraft-garments-cleaned   (dataset)
 classifier/02  ->  pushes  <user>/threadcraft-garment-classifier (model)
 
+measurement-predictor/01  ->  <user>/threadcraft-measurements-cleaned   (dataset)
+measurement-predictor/02  ->  <user>/threadcraft-measurement-predictor  (model)
+
 fit-recommender/01  ->  pushes  <user>/threadcraft-fit-cleaned      (dataset)
 fit-recommender/02  ->  pushes  <user>/threadcraft-fit-recommender  (model)
 ```
@@ -97,7 +102,7 @@ so a successful final cell means the artefact is genuinely usable — not merely
 
 Kaggle gives roughly **30 GPU-hours per week**, sessions capped at 12 hours. Only
 `classifier/02_train.ipynb` needs a GPU (25–50 min), so a full end-to-end run costs well under an
-hour of quota. Running the other three on GPU by mistake is the main way to waste it.
+hour of quota. Running the other five on GPU by mistake is the main way to waste it.
 
 ## Common errors
 
@@ -110,3 +115,5 @@ hour of quota. Running the other three on GPU by mistake is the main way to wast
 | Notebook stops when you close the tab | Ran cells manually | Use **Save & Run All (Commit)** |
 | `CUDA out of memory` | Batch too large for the T4 | Drop `BATCH_SIZE` from 64 to 32 in `classifier/02` |
 | `RepositoryNotFoundError` on the cleaned dataset | `01` hasn't been run, or `HF_USERNAME` differs between the two notebooks | Run `01` first; check the username matches exactly |
+| `AssertionError: expected 4082 male rows` | ANSUR II URL fetched over `http://` instead of `https://` — it silently returns an HTML page | Use the `https://` URLs already in the notebook |
+| `UnicodeDecodeError` reading ANSUR II | The CSVs are `latin-1`, not UTF-8 | Already handled in the notebook — don't remove `encoding="latin-1"` |

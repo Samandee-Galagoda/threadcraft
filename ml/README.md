@@ -1,6 +1,6 @@
 # ThreadCraft — Machine Learning
 
-Two models, each in its own folder, each with a **data cleaning** notebook and a **training**
+Three models, each in its own folder, each with a **data cleaning** notebook and a **training**
 notebook. Run them in numeric order.
 
 ```
@@ -8,11 +8,23 @@ ml/
 ├── classifier/                 Model 1 — garment type from a reference image
 │   ├── 01_data_cleaning.ipynb  CPU · cleans + splits + pushes dataset to HF
 │   └── 02_train.ipynb          GPU T4 x2 · fine-tunes ViT, pushes model to HF
-├── fit-recommender/            Model 2 — will this size run small / fit / large?
+├── measurement-predictor/      Model 2 — predict + validate body measurements
+│   ├── 01_data_cleaning.ipynb  CPU · ANSUR II, unit conversion, pushes to HF
+│   └── 02_train.ipynb          CPU · 13 regressors, pushes model to HF
+├── fit-recommender/            Model 3 — will this size run small / fit / large?
 │   ├── 01_data_cleaning.ipynb  CPU · downloads, parses, cleans, pushes to HF
 │   └── 02_train.ipynb          CPU · gradient boosting, pushes model to HF
 └── data/                       (no data committed — see data/README.md)
 ```
+
+**Only `classifier/02_train.ipynb` needs a GPU.** The other five run on CPU in minutes — run them
+with the accelerator set to None to protect your weekly quota.
+
+### If you only have time for two
+
+Run **Model 1** and **Model 2**. Model 2 is the stronger result (R² 0.82, MAE ~1.2 cm) and
+addresses a limitation the proposal itself names. Model 3 is honest but modest (macro F1 0.41)
+and is best presented as a supporting experiment — see its README for why.
 
 Setup steps for Kaggle + the Hugging Face token:
 **[`docs/deployment/kaggle-huggingface-guide.md`](../docs/deployment/kaggle-huggingface-guide.md)**
@@ -43,7 +55,39 @@ Restricting to Apparel and predicting `articleType` is deliberate: the raw datas
 watches, handbags and deodorant, and a model trained on all 141 classes mostly predicts watches.
 The Apparel-only label set maps directly onto ThreadCraft's own cloth types.
 
-## Model 2 — Size/fit recommender
+## Model 2 — Measurement predictor & validator
+
+| | |
+|---|---|
+| **Question** | From the measurements this customer *has* taken, what are the rest? And is any entry a typo? |
+| **Dataset** | **ANSUR II** — 6,068 people × 93 measurements, US Army anthropometric survey |
+| **Licence** | **US Government work, unlimited public release** — cleanest licence in the project |
+| **Source** | Direct HTTPS from Penn State OPEN Design Lab — no login, no gating |
+| **Algorithm** | 13 × `HistGradientBoostingRegressor`, one per measurement |
+| **Accelerator** | **CPU for both notebooks** |
+| **Headline metric** | R² and MAE in cm |
+
+Measured results, run end-to-end on the real data:
+
+| Scenario | Mean R² | Mean MAE |
+|---|---|---|
+| height + weight + age + sex only | 0.818 | 1.62 cm |
+| + chest & waist | 0.819 | 1.33 cm |
+| + chest, waist, hip, shoulder | 0.826 | 1.21 cm |
+
+Validator at the 99th-percentile threshold: **2.1% false positives**, catching **98.6%** of 20%
+errors and **100%** of 2× errors (e.g. inches entered instead of centimetres).
+
+**This is the strongest of the three models**, and it addresses a limitation the proposal
+explicitly names ("the platform relies on self-reported customer measurements"). Two design
+choices are backed by measurement rather than assertion: masked-input training beat the simpler
+alternative on **13/13** targets, and the flagging threshold was tuned across five percentiles.
+
+Its key caveat belongs up front in the write-up: ANSUR II is **US Army personnel**, and body
+proportions vary between populations. ThreadCraft serves a Sri Lankan market, so predictions are
+an editable starting point, never a replacement for measuring.
+
+## Model 3 — Size/fit recommender
 
 | | |
 |---|---|
@@ -88,12 +132,14 @@ present the output as an advisory starting point, never an authoritative size.
 
 ## What gets published to Hugging Face
 
-Running all four notebooks produces four HF repos under your account:
+Running all six notebooks produces six HF repos under your account:
 
 | Repo | Type |
 |---|---|
 | `<user>/threadcraft-garments-cleaned` | dataset |
 | `<user>/threadcraft-garment-classifier` | model |
+| `<user>/threadcraft-measurements-cleaned` | dataset |
+| `<user>/threadcraft-measurement-predictor` | model |
 | `<user>/threadcraft-fit-cleaned` | dataset |
 | `<user>/threadcraft-fit-recommender` | model |
 
