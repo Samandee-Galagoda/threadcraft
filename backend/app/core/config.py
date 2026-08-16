@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     # CORS — explicit origin list; never "*" (this app uses Bearer auth, not cookies,
     # so allow_credentials stays False and a wildcard origin is unnecessary anyway)
     cors_origins: list[str] = ["http://localhost:5173"]
+    # Vercel gives every preview deployment its own hostname, so they can't be
+    # enumerated in the list above. A regex covers them, e.g.
+    #   https://threadcraft-.*\.vercel\.app
+    cors_origin_regex: str | None = None
 
     # AI mockup generation
     cf_account_id: str | None = None
