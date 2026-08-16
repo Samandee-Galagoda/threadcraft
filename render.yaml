@@ -76,3 +76,16 @@ services:
         sync: false
       - key: HF_TOKEN
         sync: false
+      # --- Payments (optional; falls back to simulated checkout) ---
+      # Test keys only. Blank means orders are marked paid without a charge.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      # Must point at the deployed frontend, not localhost, or Stripe returns
+      # the customer to a page that doesn't exist and the payment is never
+      # confirmed. Both take ?order=<number>; success also gets &session_id=...
+      - key: CHECKOUT_SUCCESS_URL
+        sync: false
+      - key: CHECKOUT_CANCEL_URL
+        sync: false

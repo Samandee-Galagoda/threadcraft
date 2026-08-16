@@ -7,7 +7,7 @@ import StepMaterial from '../components/wizard/StepMaterial';
 import StepMeasurements from '../components/wizard/StepMeasurements';
 import StepMockup from '../components/wizard/StepMockup';
 import StepPricing from '../components/wizard/StepPricing';
-import { catalog, dashboard, mockup as mockupApi, orders, pricing } from '../api';
+import { catalog, dashboard, mockup as mockupApi, orders, payments, pricing } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { resetWizard, useWizard } from '../context/WizardContext';
 import { TOTAL_STEPS, highestUnlockedStep, isStepComplete } from '../lib/wizardReducer';
@@ -211,8 +211,29 @@ export default function DesignWizard() {
         mockup_model: state.mockup?.model_id ?? null,
         ...(isAuthenticated ? {} : { guest_email: guestEmail }),
       });
+      // The order is committed at this point. Everything below is payment, and
+      // a failure there must not lose the order — it stays pending and the
+      // success page offers to resume, rather than the customer re-designing.
       resetWizard();
-      navigate(`/success?order=${encodeURIComponent(order.order_number)}`);
+
+      let session = null;
+      try {
+        session = await payments.checkout(order.order_number);
+      } catch {
+        // Deliberately swallowed: the success page reads the real payment
+        // status from the server and shows its own retry.
+      }
+
+      if (session?.url) {
+        // Hosted Stripe Checkout lives outside the SPA, so this is a full
+        // navigation rather than a router push.
+        window.location.href = session.url;
+        return;
+      }
+
+      const query = new URLSearchParams({ order: order.order_number });
+      if (session?.session_id) query.set('session_id', session.session_id);
+      navigate(`/success?${query}`);
     } catch (err) {
       setPlaceError(err.message || 'Could not place the order.');
     } finally {
