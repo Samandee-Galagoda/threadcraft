@@ -8,3 +8,18 @@ pydantic-settings==2.7.1
 email-validator==2.3.0
 PyJWT==2.13.0
 bcrypt==5.0.0
+httpx==0.28.1
+python-multipart==0.0.20
+
+# --- Optional extras -------------------------------------------------------
+# The app runs fully without these; each corresponding feature degrades to a
+# documented fallback when its dependency or credentials are absent.
+#
+#   boto3            -> Cloudflare R2 object storage (else local disk)
+#   joblib           -> the two scikit-learn models from the Hub
+#   scikit-learn     -> ditto (must match the version the models were trained on)
+#   pandas           -> ditto
+#   huggingface-hub  -> downloading any published model
+#   transformers     -> the ViT garment classifier (~350 MB; off by default)
+#
+# Install with:  pip install -r requirements-ml.txt

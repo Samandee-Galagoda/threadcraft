@@ -1,0 +1,20 @@
+# Optional ML + storage extras. The API runs without any of these — each
+# feature reports itself unavailable rather than failing.
+#
+# scikit-learn MUST match the version the models were trained with on Kaggle,
+# or joblib will refuse to unpickle them. Check the `sklearn_version` field
+# recorded inside each published model artefact.
+
+-r requirements.txt
+
+huggingface-hub==0.28.1
+joblib==1.4.2
+scikit-learn==1.7.2
+pandas==2.2.3
+boto3==1.35.99
+
+# Only needed if ML_ENABLE_CLASSIFIER=true. Pulls torch (~800 MB) — too large
+# for most free-tier instances, which is why it is opt-in.
+# transformers==5.15.0
+# torch==2.6.0
+# pillow==11.1.0

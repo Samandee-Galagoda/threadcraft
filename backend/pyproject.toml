@@ -10,11 +10,21 @@ select = ["E", "F", "I", "UP", "B"]
 # FastAPI's Depends()/Header()/Query() as default arguments is the required,
 # idiomatic pattern for dependency injection, not the mutable-default-argument
 # bug B008 exists to catch.
-extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Query", "fastapi.Path"]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Header",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.File",
+    "fastapi.Form",
+]
 
 [tool.ruff.lint.per-file-ignores]
 # Long-form measurement instructions read better as one line than wrapped.
 "app/db/seed.py" = ["E501"]
+# Contains an embedded SVG literal; wrapping its attribute lines hurts
+# readability without making the markup any clearer.
+"app/services/mockup.py" = ["E501"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

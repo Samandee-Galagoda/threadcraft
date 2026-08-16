@@ -49,6 +49,37 @@ class Settings(BaseSettings):
     resend_api_key: str | None = None
     mail_from: str = "ThreadCraft <onboarding@resend.dev>"
 
+    # Trained ML models on the Hugging Face Hub.
+    # Set HF_USERNAME and the three repo IDs default to the notebooks' output names;
+    # override any of them explicitly if you renamed a repo.
+    hf_username: str | None = None
+    hf_classifier_model: str | None = None
+    hf_measurement_model: str | None = None
+    hf_fit_model: str | None = None
+    ml_enabled: bool = True  # set False to disable model loading entirely
+    # The ViT classifier is ~350 MB — more than a 512 MB free-tier instance can
+    # comfortably hold alongside the app, so it is gated separately from the two
+    # small scikit-learn models.
+    ml_enable_classifier: bool = False
+
+    @property
+    def classifier_repo(self) -> str | None:
+        if self.hf_classifier_model:
+            return self.hf_classifier_model
+        return f"{self.hf_username}/threadcraft-garment-classifier" if self.hf_username else None
+
+    @property
+    def measurement_repo(self) -> str | None:
+        if self.hf_measurement_model:
+            return self.hf_measurement_model
+        return f"{self.hf_username}/threadcraft-measurement-predictor" if self.hf_username else None
+
+    @property
+    def fit_repo(self) -> str | None:
+        if self.hf_fit_model:
+            return self.hf_fit_model
+        return f"{self.hf_username}/threadcraft-fit-recommender" if self.hf_username else None
+
     # Seed data
     admin_email: str = "admin@threadcraft.lk"
     admin_password: str = "ChangeMe123!"
