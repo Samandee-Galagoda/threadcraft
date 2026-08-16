@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function Auth() {
   const [tab, setTab] = useState('register');
   const [pwLength, setPwLength] = useState(0);
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const { login, register, isAuthenticated } = useAuth();
+
+  // Where to land after signing in — set by ProtectedRoute when it bounced you here.
+  const next = params.get('next') || '/dashboard';
+  const sessionExpired = params.get('expired') === '1';
 
   // Form states
   const [firstName, setFirstName] = useState('');
@@ -17,11 +24,8 @@ export default function Auth() {
 
   // Redirect if already logged in
   useEffect(() => {
-    const token = localStorage.getItem('tc_token');
-    if (token) {
-      navigate('/dashboard');
-    }
-  }, [navigate]);
+    if (isAuthenticated) navigate(next, { replace: true });
+  }, [isAuthenticated, navigate, next]);
 
   const handlePwChange = (e) => {
     setPassword(e.target.value);
@@ -61,33 +65,10 @@ export default function Auth() {
 
     setSubmitting(true);
     try {
-      const response = await fetch('http://localhost:8000/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          first_name: firstName,
-          last_name: lastName,
-          email: email,
-          password: password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Registration failed.');
-      }
-
-      // Store auth session
-      localStorage.setItem('tc_token', data.access_token);
-      localStorage.setItem('tc_user', JSON.stringify(data.user));
-
-      // Navigate to dashboard
-      navigate('/dashboard');
+      await register({ firstName, lastName, email, password });
+      navigate(next, { replace: true });
     } catch (err) {
-      setError(err.message || 'Server error occurred. Please ensure the backend is running.');
+      setError(err.message || 'Could not reach the server. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -104,31 +85,10 @@ export default function Auth() {
 
     setSubmitting(true);
     try {
-      const response = await fetch('http://localhost:8000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: email,
-          password: password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Login failed.');
-      }
-
-      // Store auth session
-      localStorage.setItem('tc_token', data.access_token);
-      localStorage.setItem('tc_user', JSON.stringify(data.user));
-
-      // Navigate to dashboard
-      navigate('/dashboard');
+      await login({ email, password });
+      navigate(next, { replace: true });
     } catch (err) {
-      setError(err.message || 'Server error occurred. Please ensure the backend is running.');
+      setError(err.message || 'Could not reach the server. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -182,6 +142,10 @@ export default function Auth() {
               <div className={`auth-tab ${tab === 'register' ? 'active' : ''}`} onClick={() => { setTab('register'); setError(''); }}>Create account</div>
               <div className={`auth-tab ${tab === 'login' ? 'active' : ''}`} onClick={() => { setTab('login'); setError(''); }}>Sign in</div>
             </div>
+
+            {sessionExpired && !error && (
+              <div className="auth-notice">Your session expired — please sign in again.</div>
+            )}
 
             {error && (
               <div style={{ background: '#FDF2F2', border: '.5px solid #F8B4B4', color: '#9B1C1C', fontSize: '12px', padding: '12px', marginBottom: '20px', fontFamily: "'Jost', sans-serif" }}>

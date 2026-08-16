@@ -9,8 +9,15 @@
 
 huggingface-hub==0.28.1
 joblib==1.4.2
-scikit-learn==1.7.2
+# Pinned to match the version recorded in the published artefacts
+# (sklearn_version in metrics.json for both models = 1.6.1). Changing this
+# without retraining risks joblib refusing to unpickle, or silently loading
+# an estimator whose internals have moved.
+scikit-learn==1.6.1
 pandas==2.2.3
+# Required to unpickle the artefacts: Kaggle's environment serialises parts of
+# the bundle with dill, so joblib.load raises ModuleNotFoundError without it.
+dill==0.3.9
 boto3==1.35.99
 
 # Only needed if ML_ENABLE_CLASSIFIER=true. Pulls torch (~800 MB) — too large
