@@ -16,9 +16,11 @@ from app.routers import (
     quote,
     uploads,
 )
+from app.routers.admin import analytics as admin_analytics
 from app.routers.admin import catalog as admin_catalog
 from app.routers.admin import inventory as admin_inventory
 from app.routers.admin import orders as admin_orders
+from app.routers.admin import settings as admin_settings
 from app.services.storage import LOCAL_STATIC_DIR
 
 
@@ -60,6 +62,8 @@ def create_app() -> FastAPI:
     app.include_router(admin_catalog.router)
     app.include_router(admin_inventory.router)
     app.include_router(admin_orders.router)
+    app.include_router(admin_analytics.router)
+    app.include_router(admin_settings.router)
 
     return app
 

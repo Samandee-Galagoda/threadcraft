@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.deps import require_admin
@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.order import Order
 from app.models.user import User
 from app.schemas.order import OrderOut, OrderStatusUpdate
+from app.services import email as email_service
 from app.services.orders import InvalidStatusTransition, transition_status
 
 router = APIRouter(prefix="/api/admin/orders", tags=["admin:orders"], dependencies=[Depends(require_admin)])
@@ -31,6 +32,7 @@ def get_order(order_id: int, db: Session = Depends(get_db)):
 def update_order_status(
     order_id: int,
     payload: OrderStatusUpdate,
+    background_tasks: BackgroundTasks,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -45,4 +47,16 @@ def update_order_status(
 
     db.commit()
     db.refresh(order)
+
+    # Queued so the admin's UI responds immediately rather than waiting on an
+    # email provider they have no reason to care about.
+    background_tasks.add_task(email_service.send_status_update, order, payload.status)
+
     return order
+
+
+@router.get("/email-status")
+def email_status():
+    """Whether transactional email is actually configured. Worth checking
+    before a demo — the console fallback is silent from the UI's perspective."""
+    return email_service.provider_status()
