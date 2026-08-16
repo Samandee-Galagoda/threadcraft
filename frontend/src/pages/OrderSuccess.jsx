@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { mediaUrl, orders } from '../api';
+import { mediaUrl, orders, payments } from '../api';
 
 const STAGES = [
   { key: 'received', label: 'Received' },
@@ -15,10 +15,13 @@ export default function OrderSuccess() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const orderNumber = params.get('order');
+  const sessionId = params.get('session_id');
 
   const [order, setOrder] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [payNote, setPayNote] = useState(null);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     // Data fetch on mount — the setState calls resolve asynchronously, so the
@@ -29,13 +32,47 @@ export default function OrderSuccess() {
       setLoading(false);
       return;
     }
-    orders
-      .track(orderNumber)
+    // With a session_id in the URL the customer has just come back from
+    // Checkout, so confirm the payment before reading the order — otherwise
+    // the page would show "pending" for an order that was in fact just paid.
+    // The session id is only a claim; the server checks it against Stripe.
+    const confirmed = sessionId
+      ? payments
+          .verify(orderNumber, sessionId)
+          .then((result) => {
+            if (!result.paid) setPayNote(result.detail);
+          })
+          .catch((err) => setPayNote(err.message || 'Could not confirm your payment.'))
+      : Promise.resolve();
+
+    confirmed
+      .then(() => orders.track(orderNumber))
       .then(setOrder)
       .catch((err) => setError(err.message || 'Could not load your order.'))
       .finally(() => setLoading(false));
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [orderNumber]);
+  }, [orderNumber, sessionId]);
+
+  /** Resume an order that exists but was never paid — the customer cancelled
+   *  at Checkout, or the tab was closed mid-redirect. */
+  async function resumePayment() {
+    setPaying(true);
+    setPayNote(null);
+    try {
+      const session = await payments.checkout(orderNumber);
+      if (session.url) {
+        window.location.href = session.url;
+        return;
+      }
+      const result = await payments.verify(orderNumber, session.session_id);
+      setPayNote(result.detail);
+      setOrder(await orders.track(orderNumber));
+    } catch (err) {
+      setPayNote(err.message || 'Could not start checkout.');
+    } finally {
+      setPaying(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -67,6 +104,7 @@ export default function OrderSuccess() {
   }
 
   const currentIndex = STAGES.findIndex((s) => s.key === order.status);
+  const isPaid = order.payment_status === 'paid';
 
   return (
     <>
@@ -77,16 +115,29 @@ export default function OrderSuccess() {
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </div>
-        <div className="success-eyebrow">Order Confirmed</div>
+        <div className="success-eyebrow">{isPaid ? 'Order Confirmed' : 'Payment Pending'}</div>
         <h1 className="success-title">
-          Your garment is
-          <br />
-          <em>on its way</em>
+          {isPaid ? (
+            <>
+              Your garment is
+              <br />
+              <em>on its way</em>
+            </>
+          ) : (
+            <>
+              Your order is
+              <br />
+              <em>saved</em>
+            </>
+          )}
         </h1>
         <p className="success-sub">
-          Thank you. We&apos;ve recorded your {order.cloth_type_name.toLowerCase()} in{' '}
-          {order.material_name}
-          {order.color_name ? ` (${order.color_name})` : ''} and our team will begin work shortly.
+          {/* The order is real and recorded either way; only the payment state
+              differs, so the copy must not claim work has started when it
+              hasn't been paid for. */}
+          {isPaid
+            ? `Thank you. We've recorded your ${order.cloth_type_name.toLowerCase()} in ${order.material_name}${order.color_name ? ` (${order.color_name})` : ''} and our team will begin work shortly.`
+            : `We've saved your ${order.cloth_type_name.toLowerCase()} in ${order.material_name}${order.color_name ? ` (${order.color_name})` : ''}. Complete the payment below and we'll begin work.`}
         </p>
 
         {order.mockup_url && (
@@ -125,12 +176,24 @@ export default function OrderSuccess() {
           </div>
           <div className="summary-row">
             <span className="summary-key">Payment</span>
-            <span className="summary-val">{order.payment_status}</span>
+            <span className={`summary-val ${isPaid ? '' : 'unpaid'}`}>{order.payment_status}</span>
           </div>
         </div>
 
+        {payNote && <p className="pay-note">{payNote}</p>}
+
         <div className="success-actions">
-          <Link to={`/track/${order.order_number}`} className="btn-primary">
+          {!isPaid && (
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={paying}
+              onClick={resumePayment}
+            >
+              {paying ? 'Opening checkout…' : `Pay ${order.currency} ${Number(order.price_total).toLocaleString()}`}
+            </button>
+          )}
+          <Link to={`/track/${order.order_number}`} className={isPaid ? 'btn-primary' : 'btn-secondary'}>
             Track my order
           </Link>
           <button type="button" className="btn-secondary" onClick={() => navigate('/design')}>

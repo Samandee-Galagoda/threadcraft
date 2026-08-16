@@ -47,7 +47,10 @@ class Settings(BaseSettings):
     stripe_secret_key: str | None = None
     stripe_publishable_key: str | None = None
     checkout_success_url: str = "http://localhost:5173/success"
-    checkout_cancel_url: str = "http://localhost:5173/design/step/5"
+    # Cancelling returns to the success page, which detects the unpaid order
+    # and offers to resume — the wizard has already been reset by then, so
+    # sending them back to step 5 would show an empty form.
+    checkout_cancel_url: str = "http://localhost:5173/success"
 
     # Email
     resend_api_key: str | None = None

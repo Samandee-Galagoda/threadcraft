@@ -13,6 +13,7 @@ from app.routers import (
     ml,
     mockup,
     orders,
+    payments,
     quote,
     uploads,
 )
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(measurements.router)
     app.include_router(quote.router)
     app.include_router(orders.router)
+    app.include_router(payments.router)
     app.include_router(designs.router)
     app.include_router(dashboard.router)
     app.include_router(mockup.router)
