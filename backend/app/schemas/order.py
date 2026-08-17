@@ -51,6 +51,18 @@ class OrderStatusUpdate(BaseModel):
     note: str | None = None
 
 
+class OrderCancel(BaseModel):
+    """Customer-initiated cancellation.
+
+    guest_email is the second factor for orders placed without an account: the
+    order number alone identifies an order but must not be enough to destroy
+    one, since it appears on printed paperwork.
+    """
+
+    guest_email: EmailStr | None = None
+    reason: str | None = None
+
+
 class OrderOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

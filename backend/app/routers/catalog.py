@@ -8,6 +8,23 @@ from app.schemas.catalog import ClothTypeOut, DesignOptionGroupOut, MaterialOut
 router = APIRouter(prefix="/api/catalog", tags=["catalog"])
 
 
+def _serialize_group(group: DesignOptionGroup) -> DesignOptionGroupOut:
+    """Serialise a group, dropping its deactivated options.
+
+    The group-level is_active filter is applied in the query, but individual
+    options were never filtered at all: DesignOption.is_active existed on the
+    model and no read path consulted it, so deactivating a single option left
+    it visible and selectable in the wizard — and priceable, since /api/quote
+    resolves options by id. Filtering here rather than on the relationship
+    keeps deactivated rows visible to the admin, which is the whole point of a
+    soft delete.
+    """
+    out = DesignOptionGroupOut.model_validate(group)
+    active_ids = {o.id for o in group.options if o.is_active}
+    out.options = [o for o in out.options if o.id in active_ids]
+    return out
+
+
 def _global_option_groups(db: Session) -> list[DesignOptionGroupOut]:
     """Design-option groups seeded with cloth_type_id=None apply to every
     garment (fit/neckline/sleeve/pattern) — they must be merged into each
@@ -20,13 +37,22 @@ def _global_option_groups(db: Session) -> list[DesignOptionGroupOut]:
         .order_by(DesignOptionGroup.sort_order)
         .all()
     )
-    return [DesignOptionGroupOut.model_validate(g) for g in groups]
+    return [_serialize_group(g) for g in groups]
 
 
 def _serialize_cloth_type(cloth_type: ClothType, global_groups: list[DesignOptionGroupOut]) -> ClothTypeOut:
     out = ClothTypeOut.model_validate(cloth_type)
-    specific_groups = [DesignOptionGroupOut.model_validate(g) for g in cloth_type.option_groups]
+    specific_groups = [_serialize_group(g) for g in cloth_type.option_groups if g.is_active]
     out.option_groups = global_groups + specific_groups
+    return out
+
+
+def _serialize_material(material: Material) -> MaterialOut:
+    """Same omission as options: MaterialColor.is_active was never read, so a
+    withdrawn colourway stayed selectable and kept applying its surcharge."""
+    out = MaterialOut.model_validate(material)
+    active_ids = {c.id for c in material.colors if c.is_active}
+    out.colors = [c for c in out.colors if c.id in active_ids]
     return out
 
 
@@ -64,4 +90,7 @@ def get_cloth_type(slug: str, db: Session = Depends(get_db)):
 
 @router.get("/materials", response_model=list[MaterialOut])
 def list_materials(db: Session = Depends(get_db)):
-    return db.query(Material).options(joinedload(Material.colors)).filter(Material.is_active.is_(True)).all()
+    materials = (
+        db.query(Material).options(joinedload(Material.colors)).filter(Material.is_active.is_(True)).all()
+    )
+    return [_serialize_material(m) for m in materials]

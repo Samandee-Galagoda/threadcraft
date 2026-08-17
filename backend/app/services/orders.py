@@ -1,9 +1,15 @@
 import secrets
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from app.models.catalog import Material
 from app.models.order import Order, OrderStatusHistory
+
+# Cancelling after this stage no longer returns fabric to stock — by then it
+# has been cut and cannot go back on the roll.
+_STAGE_FABRIC_IS_CUT = "fabric_cut"
 
 # Forward-only fulfilment workflow. 'cancelled' is reachable from any
 # non-terminal state; nothing is reachable from a terminal state.
@@ -60,6 +66,29 @@ def record_status_change(
     order.status = to_status
 
 
+def return_fabric_to_stock(db: Session, order: Order) -> Decimal:
+    """Put an order's fabric back on the roll. Returns the metres restored.
+
+    Order creation decrements stock, and until now nothing ever reversed it:
+    a cancelled order permanently consumed cloth that was never cut, so stock
+    drifted downward with every cancellation and the low-stock alert fired on
+    fabric that was still sitting there.
+
+    Only meaningful before the fabric is actually cut. Cancelling later is a
+    write-off, not a restock, so the metres stay consumed.
+    """
+    if order.status != "received":
+        return Decimal("0")
+
+    material = db.query(Material).filter(Material.id == order.material_id).first()
+    if not material:  # material hard-deleted out from under a live order
+        return Decimal("0")
+
+    metres = Decimal(str(order.fabric_metres_used or 0))
+    material.stock_metres = Decimal(str(material.stock_metres)) + metres
+    return metres
+
+
 def transition_status(
     db: Session,
     order: Order,
@@ -67,7 +96,16 @@ def transition_status(
     changed_by_user_id: int | None = None,
     note: str | None = None,
 ) -> None:
-    """Validated state change — use this for every admin-driven status update.
-    Raises InvalidStatusTransition on any backwards/skipped/terminal move."""
+    """Validated state change — use this for every status update, admin or
+    customer. Raises InvalidStatusTransition on any backwards/skipped/terminal
+    move.
+
+    Stock restoration lives here rather than in the routers so that it cannot
+    be forgotten by whichever surface cancels next; `cancelled` being terminal
+    is what makes it safe to do unconditionally, since an order can never be
+    cancelled twice.
+    """
     validate_transition(order.status, to_status)
+    if to_status == "cancelled":
+        return_fabric_to_stock(db, order)
     record_status_change(db, order, to_status, changed_by_user_id=changed_by_user_id, note=note)

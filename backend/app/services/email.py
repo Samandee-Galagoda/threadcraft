@@ -245,9 +245,26 @@ def send_email(to: str, subject: str, html: str) -> EmailResult:
         return EmailResult(False, "resend", f"{type(exc).__name__}: {exc}")
 
 
+def absolute_media_url(url: str | None) -> str | None:
+    """Turn a stored media path into something an email client can fetch.
+
+    The local storage backend records mockups as "/static/generated/...".
+    That works in the browser, where the page supplies an origin, and is a
+    broken image everywhere else. Email has no origin: an <img src="/static/…">
+    resolves against nothing and every recipient sees a placeholder.
+
+    R2-backed URLs are already absolute and pass through untouched, which is
+    why this went unnoticed — and why the existing template test, which passed
+    a literal https:// URL, could never have caught it.
+    """
+    if not url or url.startswith(("http://", "https://", "data:")):
+        return url
+    return f"{settings.public_api_url.rstrip('/')}/{url.lstrip('/')}"
+
+
 def send_order_confirmation(order, mockup_url: str | None = None) -> EmailResult:
     recipient = order.guest_email or (order.user.email if order.user else None)
-    subject, html = render_order_confirmation(order, mockup_url)
+    subject, html = render_order_confirmation(order, absolute_media_url(mockup_url))
     return send_email(recipient, subject, html)
 
 

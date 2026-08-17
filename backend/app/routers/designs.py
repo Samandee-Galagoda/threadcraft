@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -34,3 +34,30 @@ def list_saved_designs(
         .order_by(SavedDesign.created_at.desc())
         .all()
     )
+
+
+@router.delete("/{design_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_saved_design(
+    design_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Discard a saved design.
+
+    A hard delete, unlike everything in the catalogue: a saved design is the
+    customer's own scratch work, referenced by no order and carrying no
+    history worth preserving. Soft-deleting it would mean their dashboard
+    quietly kept rows they had asked to be rid of.
+
+    Scoped by user_id in the same query as the id, so another customer's design
+    is a 404 rather than a 403 — a 403 would confirm the row exists.
+    """
+    design = (
+        db.query(SavedDesign)
+        .filter(SavedDesign.id == design_id, SavedDesign.user_id == current_user.id)
+        .first()
+    )
+    if not design:
+        raise HTTPException(status_code=404, detail="Saved design not found")
+    db.delete(design)
+    db.commit()

@@ -11,6 +11,12 @@ class Settings(BaseSettings):
 
     env: Literal["dev", "test", "prod"] = "dev"
 
+    # Where this API is reachable from the public internet. Needed because a
+    # background task has no request to derive it from, and email clients
+    # cannot resolve the relative /static/... paths the local storage backend
+    # produces — a relative src in an email is simply a broken image.
+    public_api_url: str = "http://localhost:8000"
+
     # Database
     database_url: str = "sqlite:///./threadcraft.db"
 
