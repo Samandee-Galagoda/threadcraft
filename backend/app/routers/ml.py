@@ -15,7 +15,7 @@ from app.db.session import get_db
 from app.models.catalog import ClothType
 from app.services import fit as fit_service
 from app.services import ml as ml_service
-from app.services import storage
+from app.services import sizing, storage
 
 router = APIRouter(prefix="/api/ml", tags=["ml"])
 
@@ -91,6 +91,87 @@ def validate_measurements(profile: CustomerProfile):
         else f"{len(result)} measurement(s) look inconsistent — please re-check."
     )
     return ValidateResponse(available=True, warnings=result, note=note)
+
+
+class SizeEstimateRequest(CustomerProfile):
+    """Height and weight are enough; any measurement the customer has already
+    entered is used directly instead of being predicted."""
+
+
+class SizeEstimateResponse(BaseModel):
+    available: bool
+    size: str | None = None
+    # Per measurement: the value used, its band, and whether it was measured by
+    # the customer or predicted. Without that split the customer cannot tell
+    # which parts of the answer rest on a model.
+    basis: dict[str, dict] = Field(default_factory=dict)
+    spans_multiple_bands: bool = False
+    detail: str | None = None
+    note: str
+
+
+SIZE_NOTE = (
+    "A reference point only — UK retail charts differ by several centimetres between "
+    "shops, which is exactly why ready-to-wear fit is unreliable. Your garment is cut "
+    "to the measurements below, not to this size."
+)
+
+
+@router.post("/size-estimate", response_model=SizeEstimateResponse)
+def size_estimate(payload: SizeEstimateRequest):
+    """What size would this customer be off the rack?
+
+    Composes two things with clearly separated responsibilities: the trained
+    measurement predictor infers chest/waist/hip from height and weight, and a
+    deterministic UK chart turns those into a band.
+
+    This replaces the withdrawn fit recommender. Because both halves are
+    monotonic in body size, the composition cannot invert — the failure that
+    made the previous model unshippable is structurally impossible here rather
+    than merely unobserved. See docs/testing/ml-evaluation.md.
+    """
+    profile = payload.model_dump(exclude_none=True)
+    if not profile.get("height") or not profile.get("weight"):
+        raise HTTPException(status_code=400, detail="height and weight are required to estimate a size")
+
+    measured = {k: profile[k] for k in ("chest", "waist", "hip") if profile.get(k) is not None}
+
+    predicted = {}
+    if len(measured) < 3:
+        suggestions = ml_service.suggest_measurements(profile) or {}
+        predicted = {
+            k: v for k, v in suggestions.items() if k in ("chest", "waist", "hip") and k not in measured
+        }
+
+    values = {**measured, **{k: v["predicted_cm"] for k, v in predicted.items()}}
+    if not values:
+        return SizeEstimateResponse(
+            available=False,
+            note="Size estimates need the measurement predictor, which is not configured here.",
+        )
+
+    estimate = sizing.estimate_size(values, sex=profile.get("sex"))
+    if estimate is None:
+        return SizeEstimateResponse(available=False, note="Not enough information to estimate a size.")
+
+    basis = {
+        name: {
+            "value_cm": round(float(value), 1),
+            "band": estimate.per_measurement.get(name),
+            "source": "measured" if name in measured else "predicted",
+            "confidence_cm": predicted.get(name, {}).get("confidence_cm"),
+        }
+        for name, value in values.items()
+    }
+
+    return SizeEstimateResponse(
+        available=True,
+        size=estimate.size,
+        basis=basis,
+        spans_multiple_bands=estimate.spans_multiple_bands,
+        detail=estimate.note,
+        note=SIZE_NOTE,
+    )
 
 
 class FitRiskRequest(BaseModel):

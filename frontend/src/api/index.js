@@ -84,10 +84,11 @@ export const ml = {
     api.post('/api/ml/measurements/suggest', profile, { auth: false }),
   validateMeasurements: (profile) =>
     api.post('/api/ml/measurements/validate', profile, { auth: false }),
-  // No size-recommendation binding. The fit recommender is published but not
-  // surfaced: both framings failed validation (see docs/testing/ml-evaluation.md).
-  // /api/ml/fit-risk still exists as the evaluation surface that produced that
-  // evidence, and is deliberately not called from the wizard.
+  // Replaces the withdrawn fit recommender. The trained measurement predictor
+  // infers chest/waist/hip; a deterministic UK chart turns those into a band.
+  // Both halves are monotonic, so unlike the model this replaced it cannot
+  // invert. See docs/testing/ml-evaluation.md.
+  sizeEstimate: (profile) => api.post('/api/ml/size-estimate', profile, { auth: false }),
   classifyGarment(file) {
     const form = new FormData();
     form.append('file', file);
