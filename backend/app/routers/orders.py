@@ -8,7 +8,7 @@ from app.core.deps import get_optional_user
 from app.db.session import get_db
 from app.models.order import Order, OrderReferenceImage
 from app.models.user import User
-from app.schemas.order import OrderCreate, OrderOut
+from app.schemas.order import OrderCancel, OrderCreate, OrderOut
 from app.services import catalog as catalog_service
 from app.services import orders as orders_service
 
@@ -117,3 +117,61 @@ def my_orders(
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Login required")
     return db.query(Order).filter(Order.user_id == current_user.id).order_by(Order.created_at.desc()).all()
+
+
+@router.post("/{order_number}/cancel", response_model=OrderOut)
+def cancel_my_order(
+    order_number: str,
+    payload: OrderCancel,
+    current_user: User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    """Let a customer cancel their own order before work starts.
+
+    Previously only an admin could cancel, so a customer who ordered by mistake
+    had no recourse in the product at all.
+
+    **Authorisation.** Viewing an order needs only its number, but cancelling
+    is destructive, so the number alone is not enough. A signed-in customer
+    must own the order; a guest must also supply the email the order was placed
+    with. Without that second factor, anyone who saw a printed order number
+    could cancel someone else's garment.
+
+    **Window.** Only while `received`. Once fabric is cut the cloth is
+    committed, which is exactly why transition_status only restocks from that
+    state — the two rules are the same rule.
+    """
+    order = db.query(Order).filter(Order.order_number == order_number).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.user_id is not None:
+        if not current_user or current_user.id != order.user_id:
+            raise HTTPException(status_code=403, detail="This order belongs to another account")
+    else:
+        supplied = (payload.guest_email or "").strip().lower()
+        if not supplied or supplied != (order.guest_email or "").lower():
+            raise HTTPException(
+                status_code=403,
+                detail="Confirm the email address this order was placed with to cancel it",
+            )
+
+    if order.status != "received":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This order has already gone into production and can no longer be "
+                "cancelled online. Please contact us."
+            ),
+        )
+
+    orders_service.transition_status(
+        db,
+        order,
+        "cancelled",
+        changed_by_user_id=current_user.id if current_user else None,
+        note=payload.reason or "Cancelled by customer",
+    )
+    db.commit()
+    db.refresh(order)
+    return order

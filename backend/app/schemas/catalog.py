@@ -67,6 +67,45 @@ class MaterialOut(BaseModel):
         return self.stock_metres <= self.low_stock_threshold
 
 
+class AdminMaterialOut(MaterialOut):
+    """Admin view of a fabric.
+
+    Adds the active flag and the prompt term. Neither belongs on the customer
+    surface: the public catalogue already filters inactive rows out, and
+    ai_prompt_term is internal vocabulary fed to the image model rather than
+    anything a shopper should see attached to a product.
+    """
+
+    is_active: bool
+    ai_prompt_term: str
+    care_notes: str | None = None
+
+
+class AdminDesignOptionOut(DesignOptionOut):
+    """Adds the fields the customer surface deliberately hides: the active flag
+    and the prompt term the image model actually receives."""
+
+    is_active: bool
+    ai_prompt_term: str
+    sort_order: int
+
+
+class AdminDesignOptionGroupOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    label: str
+    selection_type: str
+    is_required: bool
+    is_active: bool
+    sort_order: int
+    # NULL means the group applies to every garment — the customer endpoint
+    # merges those in, so the admin needs to see which is which.
+    cloth_type_id: int | None
+    options: list[AdminDesignOptionOut]
+
+
 class ClothTypeOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
