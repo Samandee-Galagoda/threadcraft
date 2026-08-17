@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 .venv/
+# The classifier's torch install is ~800 MB, so it lives in its own environment
+# rather than being mixed into the one that mirrors the deployment.
+.venv-classifier/
 venv/
 env/
 *.egg-info/

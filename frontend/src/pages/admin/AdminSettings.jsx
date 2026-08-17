@@ -71,6 +71,10 @@ export default function AdminSettings() {
 
   if (loading) return <div className="wizard-loading">Loading settings…</div>;
 
+  const modelByName = Object.fromEntries((health?.models?.models ?? []).map((m) => [m.name, m]));
+  const measurement = modelByName.measurement_predictor;
+  const classifier = modelByName.garment_classifier;
+
   const byKey = Object.fromEntries(settings.map((s) => [s.key, s]));
   const grouped = new Set(GROUPS.flatMap((g) => g.keys));
   const others = settings.filter((s) => !grouped.has(s.key));
@@ -177,19 +181,38 @@ export default function AdminSettings() {
               }
             />
             <Health
-              label="ML models"
-              ok={Boolean(health.models?.ml_enabled) && health.models.models.some((m) => m.loaded)}
+              label="Measurement assistance"
+              ok={Boolean(health.models?.ml_enabled) && measurement?.loaded}
               warn={Boolean(health.models) && !health.models.ml_enabled}
               detail={
                 !health.models
                   ? 'Status endpoint unreachable.'
                   : !health.models.ml_enabled
-                    ? 'ML disabled — size and measurement assistance is hidden in the wizard.'
-                    : health.models.models
-                        .map((m) => `${m.name}: ${m.loaded ? 'loaded' : m.error || 'not loaded'}`)
-                        .join(' · ')
+                    ? 'ML disabled — the wizard still works, it just stops offering estimates.'
+                    : measurement?.loaded
+                      ? 'Loaded — Step 4 offers estimates and flags inconsistent measurements.'
+                      : // Lazy-loaded on first use, so "not loaded" is the normal
+                        // state after a restart rather than a fault.
+                        measurement?.error || 'Configured; loads on first use.'
               }
             />
+            <Health
+              label="Garment recogniser"
+              ok={Boolean(classifier?.loaded)}
+              warn={!classifier?.repo}
+              detail={
+                !health.models
+                  ? 'Status endpoint unreachable.'
+                  : !classifier?.repo
+                    ? 'Off on this deployment — the ViT needs ~1.15 GB against a 512 MB instance. Runs locally via requirements-classifier.txt.'
+                    : classifier.loaded
+                      ? 'Loaded — Step 2 suggests a garment type from a reference photo.'
+                      : classifier.error || 'Configured; loads on first use.'
+              }
+            />
+            {/* The fit recommender is deliberately absent from this panel: it is
+                published as an ML artefact but not surfaced to customers in any
+                framing. See docs/testing/ml-evaluation.md §2. */}
           </>
         )}
       </div>

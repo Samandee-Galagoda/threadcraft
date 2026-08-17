@@ -10,6 +10,7 @@ export default function StepDesign({ clothType, onSuggestClothType }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [classification, setClassification] = useState(null);
+  const [classifierNote, setClassifierNote] = useState(null);
 
   const groups = clothType?.option_groups ?? [];
 
@@ -40,10 +41,14 @@ export default function StepDesign({ clothType, onSuggestClothType }) {
         // suggestion, and only offered for the first image.
         if (uploaded.length === 1) {
           try {
-            const guess = await ml.classifyGarment(file);
-            if (guess.available && guess.predictions?.length) setClassification(guess);
+            // Stored unconditionally, including `available: false`. Previously
+            // an unavailable classifier rendered nothing at all, so the deployed
+            // site looked like the feature was broken rather than switched off —
+            // the opposite of StepMeasurements, which says so via .ai-note.
+            setClassification(await ml.classifyGarment(file));
           } catch {
-            // Classifier is advisory; never let it break an upload.
+            // Advisory only; an upload must never fail because of it.
+            setClassifierNote('Could not reach the garment recogniser — carry on, it is optional.');
           }
         }
       }
@@ -153,7 +158,7 @@ export default function StepDesign({ clothType, onSuggestClothType }) {
           </div>
         )}
 
-        {classification?.available && (
+        {classification?.available && classification.predictions?.length > 0 && (
           <div className="ai-hint">
             <strong>AI suggestion</strong> — that looks like{' '}
             <em>{classification.predictions[0].label}</em>{' '}
@@ -170,6 +175,14 @@ export default function StepDesign({ clothType, onSuggestClothType }) {
               )}
           </div>
         )}
+
+        {/* Say why nothing was suggested. The model needs ~1.15 GB and the free
+            deployment has 512 MB, so on the hosted site this is the normal
+            state — and an unexplained blank reads as a bug. */}
+        {classification && !classification.available && (
+          <p className="ai-note">{classification.note}</p>
+        )}
+        {classifierNote && <p className="ai-note">{classifierNote}</p>}
       </div>
     </div>
   );

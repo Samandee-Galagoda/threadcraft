@@ -4,6 +4,8 @@ Every endpoint here is **assistive**: if a model is unavailable the response say
 so and the caller carries on. None of this is allowed to block the ordering flow.
 """
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -11,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.catalog import ClothType
+from app.services import fit as fit_service
 from app.services import ml as ml_service
 from app.services import storage
 
@@ -90,39 +93,127 @@ def validate_measurements(profile: CustomerProfile):
     return ValidateResponse(available=True, warnings=result, note=note)
 
 
-class SizeRequest(CustomerProfile):
-    category: str = "dress"
-    rented_for: str = "everyday"
+class FitRiskRequest(BaseModel):
+    """The ready-to-wear size a customer already owns, plus enough body profile
+    to ask whether that size runs small or large on them.
+
+    Deliberately not derived from CustomerProfile: that would drag thirteen
+    irrelevant garment measurements into the OpenAPI schema of an endpoint that
+    uses none of them.
+
+    Bounds here are wider than the model's training ranges on purpose — only
+    the absurd is rejected at the edge, and anything merely out-of-distribution
+    is downgraded to "missing" in build_fit_features. A 215 cm customer deserves
+    an honest "we can't advise on this", not a 422 that reads as
+    "your body is invalid".
+    """
+
+    height: float | None = Field(default=None, ge=50, le=260)  # cm
+    weight: float | None = Field(default=None, ge=20, le=400)  # kg
+    age: float | None = Field(default=None, ge=5, le=120)
+    # Bounded to the sweep range the artefact records in candidate_sizes.
+    usual_size: float | None = Field(default=None, ge=0, le=30)
+    # Two of the model's seven numeric features, previously unreachable from the
+    # API and therefore always missing at inference. No UI yet — exposed here so
+    # the capability is real and the ablation is measurable.
+    bra_band: int | None = Field(default=None, ge=26, le=50)
+    bra_cup: str | None = Field(default=None, max_length=6)
     body_type: str | None = None
+    cloth_type_slug: str | None = None
+    # ThreadCraft does not rent. `occasion` is the customer-facing word; the
+    # service maps it onto the rental vocabulary the encoder was fit on.
+    occasion: str = "everyday"
 
 
-class SizeResponse(BaseModel):
+class FitProbabilities(BaseModel):
+    runs_small: float
+    fits: float
+    runs_large: float
+
+
+class FitRiskResponse(BaseModel):
+    """Note the absence of any recommended-size field. That is the point: the
+    size sweep this endpoint replaced was non-monotonic against the deployed
+    model. See docs/testing/ml-evaluation.md."""
+
     available: bool
-    recommendations: list[dict] = Field(default_factory=list)
+    verdict: str | None = None
+    headline: str | None = None
+    detail: str | None = None
+    probabilities: FitProbabilities | None = None
+    usual_size: float | None = None
+    # No "high" member, deliberately: the type makes an overclaim unshippable.
+    confidence: Literal["low", "moderate"] = "low"
+    caveats: list[str] = Field(default_factory=list)
+    inputs_used: list[str] = Field(default_factory=list)
+    inputs_missing: list[str] = Field(default_factory=list)
     note: str
 
 
-@router.post("/recommend-size", response_model=SizeResponse)
-def recommend_size(payload: SizeRequest):
-    """Suggest a starting size by sweeping candidates for the highest P(fit)."""
-    customer = payload.model_dump(exclude_none=True)
-    if customer.get("height") and customer.get("weight"):
-        customer["bmi"] = round(customer["weight"] / (customer["height"] / 100) ** 2, 2)
-    # The fit model was trained with these column names.
-    customer["height_cm"] = customer.get("height")
-    customer["weight_kg"] = customer.get("weight")
+@router.post("/fit-risk", response_model=FitRiskResponse)
+def fit_risk(payload: FitRiskRequest):
+    """Does the size this customer usually wears run small, fit, or run large?
 
-    result = ml_service.recommend_size(customer)
+    Replaces POST /recommend-size, which swept candidate sizes and ranked them
+    by P(fit). That inverted: holding height at 170 cm and sweeping weight
+    45 -> 105 kg, the top size went 27, 0, 15, 17, 7, 7, 7. This asks the model
+    the question its own card names as the intended use.
+    """
+    if not ml_service.fit_available():
+        return FitRiskResponse(available=False, note="Fit guidance is not configured on this deployment.")
+
+    if payload.usual_size is None:
+        # Answered without touching the model: loading a multi-megabyte artefact
+        # to respond to a question with no input would stall a cold instance for
+        # seconds on what is effectively a keystroke.
+        empty = fit_service.interpret_fit_risk({}, usual_size=None)
+        return FitRiskResponse(
+            available=True,
+            verdict=empty.verdict,
+            headline=empty.headline,
+            detail=empty.detail,
+            note=fit_service.NOTE,
+        )
+
+    result = ml_service.assess_fit_risk(payload.model_dump())
     if result is None:
-        return SizeResponse(available=False, note="Size recommender is not configured on this deployment.")
-    return SizeResponse(
+        return FitRiskResponse(available=False, note="Fit guidance is unavailable right now.")
+
+    return FitRiskResponse(
         available=True,
-        recommendations=result,
-        note=(
-            "Advisory only. Trained on rental data dominated by dresses and gowns, "
-            "so treat this as a starting point rather than an authoritative size."
-        ),
+        verdict=result.verdict,
+        headline=result.headline,
+        detail=result.detail,
+        probabilities=FitProbabilities(**result.probabilities),
+        usual_size=result.usual_size,
+        confidence=result.confidence,
+        caveats=list(result.caveats),
+        inputs_used=list(result.inputs_used),
+        inputs_missing=list(result.inputs_missing),
+        note=fit_service.NOTE,
     )
+
+
+# Below this, a suggestion is noise presented as advice.
+#
+# Chosen from measured behaviour, not taste. On the 60x80 catalogue images the
+# model was trained on, correct predictions mostly score 0.5-0.96 while its
+# mistakes sit at 0.23-0.49. On ordinary photographs — which is what a customer
+# actually uploads — the surviving sellable labels score 0.04-0.26, i.e. noise.
+# A floor here means the feature answers confidently on inputs it can handle and
+# stays quiet on the ones it cannot, rather than offering "that looks like a
+# Kurta (4% confidence)".
+MIN_CLASSIFIER_CONFIDENCE = 0.35
+
+
+def _match_key(value: str) -> str:
+    """Normalise a garment name or model label for comparison.
+
+    Lowercases, drops non-alphanumerics and trims a trailing plural, so
+    "T-shirt", "tshirt" and "Tshirts" all collapse to the same key.
+    """
+    stripped = "".join(ch for ch in value.lower() if ch.isalnum())
+    return stripped[:-1] if stripped.endswith("s") else stripped
 
 
 class ClassifyResponse(BaseModel):
@@ -149,18 +240,42 @@ async def classify_garment(file: UploadFile = File(...), db: Session = Depends(g
             note="Garment classifier is not enabled on this deployment (ML_ENABLE_CLASSIFIER).",
         )
 
-    # Best-effort mapping of the top label onto a configured cloth type.
-    matched_id = None
-    if predictions:
-        top = predictions[0]["label"].lower().rstrip("s")
-        for cloth_type in db.query(ClothType).filter(ClothType.is_active.is_(True)).all():
-            if top in cloth_type.name.lower() or cloth_type.name.lower().rstrip("s") in top:
-                matched_id = cloth_type.id
+    # Only surface predictions that name something ThreadCraft actually tailors.
+    #
+    # The model has 25 classes from a retail catalogue, including Bra, Briefs,
+    # Trunk and Innerwear Vests — none of which are orderable here, so suggesting
+    # one is wrong by construction. That is not hypothetical: on ordinary
+    # photographs (as opposed to the 60x80 catalogue images it was trained on) it
+    # returns "Bra" at 0.5-0.7 confidence for dresses, kurtas and skirts. See
+    # docs/testing/ml-evaluation.md section 3.1. Filtering to the sellable
+    # catalogue turns a confidently absurd suggestion into no suggestion, which
+    # is the honest outcome for an input the model cannot handle.
+    cloth_types = db.query(ClothType).filter(ClothType.is_active.is_(True)).all()
+    matched_id, sellable = None, []
+    for prediction in predictions:
+        if prediction.get("score", 0) < MIN_CLASSIFIER_CONFIDENCE:
+            continue
+        label = _match_key(prediction["label"])
+        for cloth_type in cloth_types:
+            # Compared against the slug as well as the name: the seeded name is
+            # "T-shirt" while the model's label is "Tshirts", and the previous
+            # substring test never matched them because of the hyphen.
+            candidates = {_match_key(cloth_type.name), _match_key(cloth_type.slug)}
+            if any(label and (label in c or c in label) for c in candidates):
+                sellable.append(prediction)
+                if matched_id is None:
+                    matched_id = cloth_type.id
                 break
+
+    if not sellable:
+        return ClassifyResponse(
+            available=True,
+            note="We couldn't match that photo to a garment we tailor — please pick the type yourself.",
+        )
 
     return ClassifyResponse(
         available=True,
-        predictions=predictions,
+        predictions=sellable,
         matched_cloth_type_id=matched_id,
         note="Suggested from your reference image — you can change it.",
     )

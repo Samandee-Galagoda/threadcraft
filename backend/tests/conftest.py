@@ -48,8 +48,7 @@ def isolate_from_developer_env():
         setattr(settings, key, False if key == "ml_enabled" else None)
 
     # Drop anything a previous run cached, so state can't leak between tests.
-    ml_service._cache.clear()
-    ml_service._failures.clear()
+    ml_service.reset_cache()
 
     yield
 

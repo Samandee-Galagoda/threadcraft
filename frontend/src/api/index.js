@@ -84,7 +84,10 @@ export const ml = {
     api.post('/api/ml/measurements/suggest', profile, { auth: false }),
   validateMeasurements: (profile) =>
     api.post('/api/ml/measurements/validate', profile, { auth: false }),
-  recommendSize: (profile) => api.post('/api/ml/recommend-size', profile, { auth: false }),
+  // No size-recommendation binding. The fit recommender is published but not
+  // surfaced: both framings failed validation (see docs/testing/ml-evaluation.md).
+  // /api/ml/fit-risk still exists as the evaluation surface that produced that
+  // evidence, and is deliberately not called from the wizard.
   classifyGarment(file) {
     const form = new FormData();
     form.append('file', file);

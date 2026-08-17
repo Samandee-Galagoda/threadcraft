@@ -1,0 +1,42 @@
+# Garment classifier extras — LOCAL / SELF-HOSTED ONLY.
+#
+# Kept out of requirements-ml.txt on purpose: render.yaml's build command runs
+# that file, and torch alone is ~800 MB installed against a 512 MB free instance.
+# Adding these there would break the deploy rather than enable a feature.
+#
+# The classifier needs roughly 1.15 GB (torch ~800 MB on disk + a ~350 MB ViT
+# resident), so it runs on a development machine or a paid tier, not on the free
+# deployment. See docs/testing/ml-evaluation.md section 3 for the hosting options
+# that were evaluated and rejected.
+#
+# NOTE: this deliberately does NOT `-r requirements-ml.txt`. That file pins
+# huggingface-hub==0.28.1, while transformers 5.15.0 requires
+# huggingface-hub>=1.5.0 — pip cannot satisfy both and the install fails
+# outright. The deployment pin is left alone (it is what the two scikit-learn
+# models are served with) and the newer hub is taken only here. The pin that
+# actually matters for those artefacts is scikit-learn==1.6.1, which is repeated
+# below and must stay identical to requirements-ml.txt.
+#
+# Install and enable:
+#   pip install -r requirements-classifier.txt
+#   ML_ENABLE_CLASSIFIER=true HF_USERNAME=<your-hf-user> uvicorn app.main:app --reload
+#
+# Then upload a reference photo at Step 2 of the wizard.
+#
+# To go back to the deployment set afterwards:
+#   pip install -r requirements-ml.txt
+
+-r requirements.txt
+
+# Must match the sklearn_version recorded in the published artefacts, exactly as
+# in requirements-ml.txt — joblib refuses to unpickle across a mismatch.
+scikit-learn==1.6.1
+joblib==1.4.2
+pandas==2.2.3
+dill==0.3.9
+boto3==1.35.99
+
+huggingface-hub>=1.5.0,<2.0
+transformers==5.15.0
+torch==2.6.0
+pillow==11.1.0
