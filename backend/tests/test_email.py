@@ -11,6 +11,8 @@ a broken f-string or a missing field producing a mangled email that still
 
 from decimal import Decimal
 
+import pytest
+
 from app.models.order import Order
 from app.services import email as email_service
 
@@ -128,3 +130,43 @@ def test_provider_status_flags_the_shared_sender_limitation():
     assert status["mode"] == "console"
     assert "resend.dev" in status["from_address"]
     assert "own" in status["note"].lower() or "verify" in status["note"].lower()
+
+
+# ── media URLs ───────────────────────────────────────────────────────────────
+# Regression: confirmations were sent with the raw stored path, which the local
+# storage backend writes as "/static/generated/...". An email has no origin to
+# resolve that against, so every recipient saw a broken image. The template
+# test above passed a literal https:// URL and so could never have caught it.
+
+
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        ("/static/generated/mockups/abc.png", "http://localhost:8000/static/generated/mockups/abc.png"),
+        ("static/generated/mockups/abc.png", "http://localhost:8000/static/generated/mockups/abc.png"),
+        # Already absolute (the R2 backend) — untouched.
+        ("https://cdn.example.com/m.png", "https://cdn.example.com/m.png"),
+        ("http://cdn.example.com/m.png", "http://cdn.example.com/m.png"),
+        (None, None),
+        ("", ""),
+    ],
+)
+def test_media_urls_are_absolutised_for_email(stored, expected):
+    assert email_service.absolute_media_url(stored) == expected
+
+
+def test_public_api_url_trailing_slash_does_not_double_up(monkeypatch):
+    monkeypatch.setattr(email_service.settings, "public_api_url", "https://api.example.com/")
+    assert email_service.absolute_media_url("/static/x.png") == "https://api.example.com/static/x.png"
+
+
+def test_confirmation_email_embeds_a_fetchable_image(monkeypatch):
+    """End of the chain: what a recipient's client actually receives."""
+    sent = {}
+    monkeypatch.setattr(email_service, "send_email", lambda to, subject, html: sent.update(to=to, html=html))
+    order = _order()
+    order.mockup_url = "/static/generated/mockups/abc.png"
+    email_service.send_order_confirmation(order, order.mockup_url)
+
+    assert 'src="http://localhost:8000/static/generated/mockups/abc.png"' in sent["html"]
+    assert 'src="/static' not in sent["html"]

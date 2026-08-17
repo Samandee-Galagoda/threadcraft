@@ -45,6 +45,12 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true # Render generates a strong random value
+      # This service's own public URL. Confirmation emails embed the design
+      # mockup, and the local storage backend records it as a relative
+      # /static/... path that no email client can resolve — so the absolute
+      # origin has to be configured rather than derived from a request.
+      - key: PUBLIC_API_URL
+        sync: false
       # Your Vercel URL(s), as a JSON array, e.g.
       #   ["https://threadcraft.vercel.app"]
       - key: CORS_ORIGINS
