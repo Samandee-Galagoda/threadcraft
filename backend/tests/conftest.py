@@ -39,7 +39,6 @@ def isolate_from_developer_env():
         "hf_username": settings.hf_username,
         "hf_classifier_model": settings.hf_classifier_model,
         "hf_measurement_model": settings.hf_measurement_model,
-        "hf_fit_model": settings.hf_fit_model,
         "cf_account_id": settings.cf_account_id,
         "cf_api_token": settings.cf_api_token,
         "hf_token": settings.hf_token,

@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WizardProvider } from './context/WizardContext';
 import Auth from './pages/Auth';
@@ -34,7 +34,30 @@ function AdminRoute({ children }) {
   if (!isAuthenticated) {
     return <Navigate to={`/auth?next=${encodeURIComponent(location.pathname)}`} replace />;
   }
-  if (!isAdmin) return <Navigate to="/dashboard" replace />;
+  // Say why, rather than bouncing to /dashboard silently. A silent redirect is
+  // indistinguishable from "the admin dashboard is broken", which is exactly how
+  // it was reported.
+  if (!isAdmin) {
+    return (
+      <div className="success-page">
+        <div className="success-eyebrow">Administrator access</div>
+        <h1 className="success-title">
+          This area is
+          <br />
+          <em>staff only</em>
+        </h1>
+        <p className="success-sub">
+          You&apos;re signed in as a customer, so the admin dashboard isn&apos;t available on this
+          account. Sign in with an administrator account to manage orders, stock and the catalogue.
+        </p>
+        <div className="success-actions">
+          <Link to="/dashboard" className="btn-primary">
+            Back to my dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
   return children;
 }
 

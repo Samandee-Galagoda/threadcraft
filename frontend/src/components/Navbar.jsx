@@ -1,16 +1,15 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function Navbar({ backLink = false, secure = false }) {
-  const [isLoggedIn] = useState(() => !!localStorage.getItem('tc_token'));
+  // Reads AuthContext rather than localStorage directly. The old version knew
+  // whether a token existed but nothing about the user, so an admin had no way
+  // to reach /admin except by typing the URL.
+  const { isAuthenticated, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   const handleProfileClick = () => {
-    if (localStorage.getItem('tc_token')) {
-      navigate('/dashboard');
-    } else {
-      navigate('/auth');
-    }
+    navigate(isAuthenticated ? '/dashboard' : '/auth');
   };
 
   return (
@@ -44,10 +43,13 @@ export default function Navbar({ backLink = false, secure = false }) {
       ) : (
         <div style={{display: 'flex', alignItems: 'center', gap: '20px'}}>
           <ul className="nav-links" style={{margin: 0}}>
-            {isLoggedIn ? (
+            {isAuthenticated ? (
               <li><Link to="/dashboard" style={{ fontWeight: 500 }}>Dashboard</Link></li>
             ) : (
               <li><Link to="/auth">Sign In</Link></li>
+            )}
+            {isAdmin && (
+              <li><Link to="/admin" className="nav-admin">Admin</Link></li>
             )}
             <li><Link to="/#about">About</Link></li>
           </ul>

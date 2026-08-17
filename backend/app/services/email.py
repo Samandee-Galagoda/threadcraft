@@ -234,15 +234,26 @@ def send_email(to: str, subject: str, html: str) -> EmailResult:
         if response.status_code in (200, 201):
             return EmailResult(True, "resend", response.json().get("id", "sent"))
         if response.status_code == 403:
-            return EmailResult(
-                False,
-                "resend",
+            return _failed(
+                to,
                 "403 — the onboarding@resend.dev sender only delivers to your own "
                 "account address. Verify a domain and update MAIL_FROM to reach customers.",
             )
-        return EmailResult(False, "resend", f"HTTP {response.status_code}: {response.text[:200]}")
+        return _failed(to, f"HTTP {response.status_code}: {response.text[:200]}")
     except Exception as exc:  # noqa: BLE001
-        return EmailResult(False, "resend", f"{type(exc).__name__}: {exc}")
+        return _failed(to, f"{type(exc).__name__}: {exc}")
+
+
+def _failed(to: str, detail: str) -> EmailResult:
+    """Record a failed send.
+
+    These run as background tasks whose return value the caller discards, so
+    without this a bounced confirmation is invisible everywhere: the customer
+    gets nothing and no log line says why. Printing is enough — the deployment's
+    log is the only place an operator would look.
+    """
+    print(f"[email] FAILED to {to}: {detail}")
+    return EmailResult(False, "resend", detail)
 
 
 def absolute_media_url(url: str | None) -> str | None:
