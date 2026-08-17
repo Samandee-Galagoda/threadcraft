@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ml } from '../../api';
 import { useWizard } from '../../context/WizardContext';
 
@@ -17,6 +17,8 @@ export default function StepMeasurements({ clothType, savedMeasurements }) {
   const [suggested, setSuggested] = useState({});
   const [warnings, setWarnings] = useState([]);
   const [mlNote, setMlNote] = useState(null);
+  const [sizeEstimate, setSizeEstimate] = useState(null);
+  const sizeRequestRef = useRef(0);
 
   // Memoised so the `?? []` fallback doesn't create a fresh array each render,
   // which would re-trigger the validation callback every time.
@@ -113,6 +115,38 @@ export default function StepMeasurements({ clothType, savedMeasurements }) {
     return () => clearTimeout(timer);
   }, [runValidation]);
 
+  const runSizeEstimate = useCallback(async () => {
+    if (!profileComplete) {
+      setSizeEstimate(null);
+      return;
+    }
+    const payload = {
+      height: Number(profile.height),
+      weight: Number(profile.weight),
+      sex: Number(profile.sex),
+      ...(profile.age ? { age: Number(profile.age) } : {}),
+    };
+    // Anything already measured is sent, so it's used instead of a prediction.
+    for (const key of ['chest', 'waist', 'hip']) {
+      const value = measurements[key];
+      if (value !== '' && value != null) payload[key] = Number(value);
+    }
+    // A stale slow response must not overwrite a fresh one — the request is
+    // re-fired on every profile and measurement change.
+    const seq = ++sizeRequestRef.current;
+    try {
+      const response = await ml.sizeEstimate(payload);
+      if (seq === sizeRequestRef.current) setSizeEstimate(response.available ? response : null);
+    } catch {
+      if (seq === sizeRequestRef.current) setSizeEstimate(null);
+    }
+  }, [profile, measurements, profileComplete]);
+
+  useEffect(() => {
+    const timer = setTimeout(runSizeEstimate, 700);
+    return () => clearTimeout(timer);
+  }, [runSizeEstimate]);
+
   const warningFor = (key) => warnings.find((w) => w.field === key);
 
   return (
@@ -184,6 +218,38 @@ export default function StepMeasurements({ clothType, savedMeasurements }) {
         )}
         {mlNote && <p className="ai-note">{mlNote}</p>}
       </div>
+
+      {/* Replaces the withdrawn size recommender. The trained model estimates
+          chest/waist/hip; a UK chart turns those into a band. Both halves are
+          monotonic in body size, so this cannot produce the inverted answers
+          that got the previous model pulled. */}
+      {sizeEstimate && (
+        <div className="form-section">
+          <div className="ai-hint">
+            <strong>Off the rack you&apos;d be about a {sizeEstimate.size}</strong>
+            {sizeEstimate.detail && <> — {sizeEstimate.detail}</>}
+            <div className="size-basis">
+              {['chest', 'waist', 'hip']
+                .filter((key) => sizeEstimate.basis[key])
+                .map((key) => {
+                  const item = sizeEstimate.basis[key];
+                  return (
+                    <span key={key}>
+                      {key} {item.value_cm} cm
+                      {/* ± is shown only for predicted values, so the customer
+                          can see which numbers came from a model. */}
+                      {item.source === 'predicted' && item.confidence_cm
+                        ? ` ±${item.confidence_cm}`
+                        : ''}
+                      {item.source === 'measured' ? ' (yours)' : ''}
+                    </span>
+                  );
+                })}
+            </div>
+          </div>
+          <p className="ai-note">{sizeEstimate.note}</p>
+        </div>
+      )}
 
       <div className="form-section">
         <span className="form-label">{clothType?.name} measurements</span>

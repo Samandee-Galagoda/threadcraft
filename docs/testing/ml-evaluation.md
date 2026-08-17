@@ -151,6 +151,57 @@ time: restrict to a single garment category, normalise `size` within brand and
 category, and evaluate against the monotonicity criterion in §2.3 rather than a
 two-point directional assert.
 
+### 2.6 What replaced it
+
+The customer question — *"what size would I be off the rack?"* — is still worth
+answering. It is now answered by **composing two components with clearly
+separated responsibilities**, rather than by one model asked to do both jobs:
+
+| Step | Component | Why |
+|---|---|---|
+| height + weight → chest/waist/hip | `threadcraft-measurement-predictor` (trained, ANSUR II) | The genuinely hard, ML-shaped inference |
+| chest/waist/hip → UK size band | `app/services/sizing.py` (deterministic chart) | A standards lookup, not something to learn |
+
+Learning the second step from rental data is exactly what produced a recommender
+that told a 45 kg customer to wear a size 27.
+
+**The composition cannot invert.** The chart is monotonic (asserted in
+`tests/test_sizing.py::test_the_chart_is_monotonic_in_every_measurement`) and the
+predictor is monotonic in body size — measured end to end through the API:
+
+| weight @165 cm | women's | | weight @175 cm | men's |
+|---|---|---|---|---|
+| 45 kg | UK 8 | | 45 kg | XS |
+| 55 kg | UK 12 | | 55 kg | S |
+| 65 kg | UK 16 | | 65 kg | M |
+| 75 kg | UK 18 | | 75 kg | L |
+| 85 kg | UK 22 | | 85 kg | XXL |
+| 95 kg | UK 24 | | 95 kg | 3XL |
+
+Monotonic in both charts. That is a property of the construction, not a metric
+that happened to come out well — which is the substantive difference from the
+model it replaced.
+
+Three further design points:
+
+- **Measured beats predicted.** Any measurement the customer has actually
+  entered is used directly, and the response marks each value `measured` or
+  `predicted` so the UI can show which parts rest on a model (with the
+  predictor's own ±confidence).
+- **Disagreement is shown, not hidden.** Bodies rarely sit in one band across
+  chest, waist and hip. The larger band is reported — cloth can be taken in but
+  not let out — and the spread is stated plainly, because a single confident
+  number would misrepresent how well *any* off-the-rack size fits.
+- **The chart is a reference, not a specification.** UK retail charts differ by
+  several centimetres between shops. Saying so is not a hedge: it is the
+  argument for made-to-measure, made with the platform's own numbers.
+
+**No third-party API was used.** The commercial sizing services (Bold Metrics,
+Virtusize, True Fit) are enterprise B2B with no self-serve tier; the "free"
+alternatives found are Shopify storefront widgets, not callable APIs; and the
+open-source implementations are built on the same RentTheRunway dataset that
+failed here, so they inherit the same label bias.
+
 ---
 
 ## 3. The garment classifier: a hosting constraint, not a model failure
