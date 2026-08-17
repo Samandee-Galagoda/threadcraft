@@ -177,4 +177,40 @@ Then sign in as your admin, open `/admin`, and check **Settings → System healt
 - **Cold starts.** ~50 s after 15 minutes idle. Mitigated by a cron ping, not eliminated.
 - **Ephemeral filesystem.** Generated mockups and uploads don't survive a redeploy unless R2 is configured. The app falls back to local disk deliberately so it runs with no third-party accounts.
 - **Vercel Hobby is non-commercial.** Fine for an academic project; a real launch would need a paid plan.
-- **Classifier disabled in production.** `ML_ENABLE_CLASSIFIER=false` because it needs torch (~800 MB), over the free instance's memory. The two scikit-learn models run fine.
+- **Classifier disabled in production.** `ML_ENABLE_CLASSIFIER=false` because it needs ~1.15 GB (torch ~800 MB installed plus a ~350 MB ViT resident) against a 512 MB instance. There is no free hosting for it either — HF Inference Providers don't serve the repo, CPU Gradio/Docker Spaces now require PRO, and ZeroGPU needs an account over 30 days old. It runs locally instead (see below), and the deployed site says so rather than failing silently. Full option analysis in [ml-evaluation.md](../testing/ml-evaluation.md#3-the-garment-classifier-a-hosting-constraint-not-a-model-failure).
+- **Size/fit recommender not surfaced.** Published as an ML artefact, but withheld from the product: both the size-sweep and the fit-risk framings failed validation. Evidence in [ml-evaluation.md](../testing/ml-evaluation.md#2-the-fit-recommender-two-framings-both-rejected).
+
+---
+
+## 6. Running the garment classifier locally (for the demo)
+
+The ViT can't run on the free tier, so demonstrate it from a local instance and
+capture the result for the report.
+
+```bash
+cd backend
+python3 -m venv .venv-classifier          # separate env — torch is ~800 MB
+.venv-classifier/bin/pip install -r requirements-classifier.txt
+
+ML_ENABLE_CLASSIFIER=true HF_USERNAME=SamaGalagoda ML_ENABLED=true \
+  .venv-classifier/bin/uvicorn app.main:app --reload
+```
+
+`requirements-classifier.txt` deliberately does **not** include
+`requirements-ml.txt`: that pins `huggingface-hub==0.28.1` while
+`transformers==5.15.0` needs `>=1.5.0`, and pip cannot satisfy both. The
+deployment pin is left untouched.
+
+Check it loaded, then drive it from the UI:
+
+```bash
+curl localhost:8000/api/ml/status        # garment_classifier should have a repo
+```
+
+Then open `/design`, pick a garment, and upload a reference photo at **Step 2**.
+A suggestion appears with a confidence score and a "Switch to this garment type"
+action. **Screenshot this** — it is the only evidence of the classifier working,
+since the deployed site reports it as unavailable.
+
+To return to the deployment environment: `pip install -r requirements-ml.txt`
+(or just use the original `.venv`).

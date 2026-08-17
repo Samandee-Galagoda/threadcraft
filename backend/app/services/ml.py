@@ -14,15 +14,35 @@ Design points that matter for a free-tier deployment:
   the app. `ML_ENABLE_CLASSIFIER` gates it separately for that reason.
 """
 
+import dataclasses
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any
 
 from app.core.config import settings
+from app.services import fit as fit_service
+
+# How long a failed load is remembered before another attempt is allowed.
+#
+# Failures used to be cached for the life of the process. On Render the process
+# is long-lived, so a single Hub 503 or a DNS blip during boot silently disabled
+# that model until the next redeploy — with /api/ml/status the only evidence it
+# had happened. A sliding window lets it heal on its own.
+MODEL_RETRY_AFTER_SECONDS = 300
 
 _lock = threading.Lock()
 _cache: dict[str, Any] = {}
-_failures: dict[str, str] = {}
+
+
+@dataclass(frozen=True)
+class _Failure:
+    at: float  # time.monotonic() — wall clock would break if the host clock steps
+    message: str
+    retryable: bool
+
+
+_failures: dict[str, _Failure] = {}
 
 
 @dataclass
@@ -31,24 +51,51 @@ class ModelStatus:
     repo: str | None
     loaded: bool
     error: str | None
+    retryable: bool = True
 
 
 def _load(name: str, loader) -> Any | None:
-    """Load once, cache, and remember failures so we don't retry on every request."""
+    """Load once and cache. Failures are remembered so we don't retry on every
+    request, but only for MODEL_RETRY_AFTER_SECONDS — a transient network fault
+    must not black out an assistive feature until someone notices and redeploys."""
     if name in _cache:
         return _cache[name]
-    if name in _failures:
+
+    failure = _failures.get(name)
+    if failure is not None and (
+        not failure.retryable or (time.monotonic() - failure.at) < MODEL_RETRY_AFTER_SECONDS
+    ):
         return None
+
     with _lock:
         if name in _cache:
             return _cache[name]
         try:
             _cache[name] = loader()
+            _failures.pop(name, None)
             return _cache[name]
         except Exception as exc:  # noqa: BLE001
-            _failures[name] = f"{type(exc).__name__}: {exc}"
-            print(f"[ml] failed to load {name}: {_failures[name]}")
+            # A missing dependency is not transient: no amount of retrying
+            # installs transformers. Everything else — network, HTTP, unpickling,
+            # a version mismatch — is worth another attempt later, and retries
+            # are cheap because the artefact is already in the local HF cache.
+            retryable = not isinstance(exc, ImportError)
+            message = f"{type(exc).__name__}: {exc}"
+            _failures[name] = _Failure(at=time.monotonic(), message=message, retryable=retryable)
+            print(f"[ml] failed to load {name}: {message}" + ("" if retryable else " (not retryable)"))
             return None
+
+
+def reset_cache() -> None:
+    """Drop every cached model and remembered failure.
+
+    Exists for the test suite, which previously reached into the two private
+    dicts directly — coupling that breaks silently when their shape changes,
+    because `.clear()` works on any dict.
+    """
+    with _lock:
+        _cache.clear()
+        _failures.clear()
 
 
 # ── Measurement predictor ────────────────────────────────────────────────
@@ -169,52 +216,83 @@ def fit_available() -> bool:
     return bool(settings.ml_enabled and settings.fit_repo)
 
 
-def recommend_size(customer: dict, top_k: int = 3) -> list[dict] | None:
-    """Sweep candidate sizes, return those ranked by P(fit)."""
+def _encode_rows(art: dict, rows: list[dict]):
+    """Feature dicts -> the encoded frame the fit model expects.
+
+    Shared so the encoding can never drift between callers: this is where an
+    off-by-one on the ordinal encoder silently corrupts every categorical while
+    still producing confident-looking probabilities.
+    """
+    import numpy as np
+    import pandas as pd
+
+    frame = pd.DataFrame([{k: (np.nan if v is None else v) for k, v in row.items()} for row in rows])
+
+    for col in art["categorical_features"]:
+        frame[col] = frame[col].fillna(art["missing_token"]).astype(str)
+
+    encoded_frame = frame[art["numeric_features"]].astype(float).copy()
+    encoded = art["encoder"].transform(frame[art["categorical_features"]])
+    for i, col in enumerate(art["categorical_features"]):
+        # +1 so the encoder's unknown value (-1) becomes 0 rather than colliding
+        # with the first real category.
+        encoded_frame[col] = encoded[:, i] + 1
+
+    return encoded_frame[art["features"]]
+
+
+def _known_categories(art: dict, column: str) -> set[str]:
+    """The values the encoder was actually fit on, for `column`."""
+    index = list(art["categorical_features"]).index(column)
+    return {str(v) for v in art["encoder"].categories_[index]}
+
+
+def assess_fit_risk(request: dict) -> fit_service.FitRisk | None:
+    """Does the size this customer already wears run small, fit, or run large?
+
+    A single forward pass on one size — deliberately NOT a sweep over candidate
+    sizes. The sweep is non-monotonic against the deployed model (see
+    services/fit.py and docs/testing/ml-evaluation.md), so it was withdrawn.
+    This asks the question the model card names as its intended use.
+
+    Returns None only when the model is unconfigured or failed to load.
+    """
     if not fit_available():
         return None
     art = _load("fit", _load_fit)
     if art is None:
         return None
 
-    import numpy as np
-    import pandas as pd
+    built = fit_service.build_fit_features(request)
+    features = dict(built.features)
+    caveats = list(built.caveats)
 
-    feats = art["features"]
-    sizes = art["candidate_sizes"]
+    # The RentTheRunway `category` vocabulary isn't documented anywhere we can
+    # rely on, so the static slug map is checked against what the encoder was
+    # actually fit on. An unrecognised value would land in the unknown bucket,
+    # which the model never saw; falling back to missing keeps it in-distribution.
+    category = features.get("category")
+    if category is not None and category not in _known_categories(art, "category"):
+        features["category"] = None
 
-    rows = []
-    for size in sizes:
-        row = {f: customer.get(f) for f in feats}
-        row["size"] = size
-        rows.append(row)
-    frame = pd.DataFrame([{k: (np.nan if v is None else v) for k, v in r.items()} for r in rows])
+    size = features.get("size")
+    if size is not None and float(size) not in {float(s) for s in art["candidate_sizes"]}:
+        caveats.append(f"Size {float(size):g} is outside the sizes seen during training.")
 
-    for col in art["categorical_features"]:
-        frame[col] = frame[col].fillna(art["missing_token"]).astype(str)
+    encoded = _encode_rows(art, [features])
+    proba = art["model"].predict_proba(encoded)
+    probabilities = fit_service.probabilities_by_name(list(art["model"].classes_), proba[0])
 
-    X = frame[art["numeric_features"]].astype(float).copy()
-    encoded = art["encoder"].transform(frame[art["categorical_features"]])
-    for i, col in enumerate(art["categorical_features"]):
-        X[col] = encoded[:, i] + 1
-
-    proba = art["model"].predict_proba(X[feats])
-    classes = list(art["model"].classes_)
-    fit_index = classes.index("fit")
-
-    ranked = sorted(
-        (
-            {
-                "size": float(size),
-                "p_fit": round(float(proba[i][fit_index]), 4),
-                **{f"p_{c}": round(float(proba[i][j]), 4) for j, c in enumerate(classes)},
-            }
-            for i, size in enumerate(sizes)
-        ),
-        key=lambda r: r["p_fit"],
-        reverse=True,
+    result = fit_service.interpret_fit_risk(
+        probabilities,
+        usual_size=float(size) if size is not None else None,
+        caveats=(fit_service.BASE_CAVEAT, *caveats),
     )
-    return ranked[:top_k]
+    return dataclasses.replace(
+        result,
+        inputs_used=tuple(built.used),
+        inputs_missing=tuple(built.missing),
+    )
 
 
 # ── Garment classifier ───────────────────────────────────────────────────
@@ -250,25 +328,27 @@ def classify_garment(image_bytes: bytes, top_k: int = 3) -> list[dict] | None:
 # ── Status ───────────────────────────────────────────────────────────────
 
 
+def _status_for(name: str, display_name: str, repo: str | None) -> ModelStatus:
+    failure = _failures.get(name)
+    return ModelStatus(
+        name=display_name,
+        repo=repo,
+        loaded=name in _cache,
+        error=failure.message if failure else None,
+        # Lets an operator tell "this will recover by itself" from "this needs a
+        # redeploy", which is otherwise indistinguishable from an error string.
+        retryable=failure.retryable if failure else True,
+    )
+
+
 def status() -> list[ModelStatus]:
     return [
-        ModelStatus(
-            name="measurement_predictor",
-            repo=settings.measurement_repo,
-            loaded="measurement" in _cache,
-            error=_failures.get("measurement"),
-        ),
-        ModelStatus(
-            name="fit_recommender",
-            repo=settings.fit_repo,
-            loaded="fit" in _cache,
-            error=_failures.get("fit"),
-        ),
-        ModelStatus(
-            name="garment_classifier",
-            repo=settings.classifier_repo if settings.ml_enable_classifier else None,
-            loaded="classifier" in _cache,
-            error=_failures.get("classifier"),
+        _status_for("measurement", "measurement_predictor", settings.measurement_repo),
+        _status_for("fit", "fit_recommender", settings.fit_repo),
+        _status_for(
+            "classifier",
+            "garment_classifier",
+            settings.classifier_repo if settings.ml_enable_classifier else None,
         ),
     ]
 
