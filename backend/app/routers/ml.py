@@ -4,8 +4,6 @@ Every endpoint here is **assistive**: if a model is unavailable the response say
 so and the caller carries on. None of this is allowed to block the ordering flow.
 """
 
-from typing import Literal
-
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -13,7 +11,6 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.catalog import ClothType
-from app.services import fit as fit_service
 from app.services import ml as ml_service
 from app.services import sizing, storage
 
@@ -171,107 +168,6 @@ def size_estimate(payload: SizeEstimateRequest):
         spans_multiple_bands=estimate.spans_multiple_bands,
         detail=estimate.note,
         note=SIZE_NOTE,
-    )
-
-
-class FitRiskRequest(BaseModel):
-    """The ready-to-wear size a customer already owns, plus enough body profile
-    to ask whether that size runs small or large on them.
-
-    Deliberately not derived from CustomerProfile: that would drag thirteen
-    irrelevant garment measurements into the OpenAPI schema of an endpoint that
-    uses none of them.
-
-    Bounds here are wider than the model's training ranges on purpose — only
-    the absurd is rejected at the edge, and anything merely out-of-distribution
-    is downgraded to "missing" in build_fit_features. A 215 cm customer deserves
-    an honest "we can't advise on this", not a 422 that reads as
-    "your body is invalid".
-    """
-
-    height: float | None = Field(default=None, ge=50, le=260)  # cm
-    weight: float | None = Field(default=None, ge=20, le=400)  # kg
-    age: float | None = Field(default=None, ge=5, le=120)
-    # Bounded to the sweep range the artefact records in candidate_sizes.
-    usual_size: float | None = Field(default=None, ge=0, le=30)
-    # Two of the model's seven numeric features, previously unreachable from the
-    # API and therefore always missing at inference. No UI yet — exposed here so
-    # the capability is real and the ablation is measurable.
-    bra_band: int | None = Field(default=None, ge=26, le=50)
-    bra_cup: str | None = Field(default=None, max_length=6)
-    body_type: str | None = None
-    cloth_type_slug: str | None = None
-    # ThreadCraft does not rent. `occasion` is the customer-facing word; the
-    # service maps it onto the rental vocabulary the encoder was fit on.
-    occasion: str = "everyday"
-
-
-class FitProbabilities(BaseModel):
-    runs_small: float
-    fits: float
-    runs_large: float
-
-
-class FitRiskResponse(BaseModel):
-    """Note the absence of any recommended-size field. That is the point: the
-    size sweep this endpoint replaced was non-monotonic against the deployed
-    model. See docs/testing/ml-evaluation.md."""
-
-    available: bool
-    verdict: str | None = None
-    headline: str | None = None
-    detail: str | None = None
-    probabilities: FitProbabilities | None = None
-    usual_size: float | None = None
-    # No "high" member, deliberately: the type makes an overclaim unshippable.
-    confidence: Literal["low", "moderate"] = "low"
-    caveats: list[str] = Field(default_factory=list)
-    inputs_used: list[str] = Field(default_factory=list)
-    inputs_missing: list[str] = Field(default_factory=list)
-    note: str
-
-
-@router.post("/fit-risk", response_model=FitRiskResponse)
-def fit_risk(payload: FitRiskRequest):
-    """Does the size this customer usually wears run small, fit, or run large?
-
-    Replaces POST /recommend-size, which swept candidate sizes and ranked them
-    by P(fit). That inverted: holding height at 170 cm and sweeping weight
-    45 -> 105 kg, the top size went 27, 0, 15, 17, 7, 7, 7. This asks the model
-    the question its own card names as the intended use.
-    """
-    if not ml_service.fit_available():
-        return FitRiskResponse(available=False, note="Fit guidance is not configured on this deployment.")
-
-    if payload.usual_size is None:
-        # Answered without touching the model: loading a multi-megabyte artefact
-        # to respond to a question with no input would stall a cold instance for
-        # seconds on what is effectively a keystroke.
-        empty = fit_service.interpret_fit_risk({}, usual_size=None)
-        return FitRiskResponse(
-            available=True,
-            verdict=empty.verdict,
-            headline=empty.headline,
-            detail=empty.detail,
-            note=fit_service.NOTE,
-        )
-
-    result = ml_service.assess_fit_risk(payload.model_dump())
-    if result is None:
-        return FitRiskResponse(available=False, note="Fit guidance is unavailable right now.")
-
-    return FitRiskResponse(
-        available=True,
-        verdict=result.verdict,
-        headline=result.headline,
-        detail=result.detail,
-        probabilities=FitProbabilities(**result.probabilities),
-        usual_size=result.usual_size,
-        confidence=result.confidence,
-        caveats=list(result.caveats),
-        inputs_used=list(result.inputs_used),
-        inputs_missing=list(result.inputs_missing),
-        note=fit_service.NOTE,
     )
 
 

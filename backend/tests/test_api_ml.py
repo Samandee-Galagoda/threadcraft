@@ -5,14 +5,19 @@ contract: every ML endpoint must report unavailability in a normal 200 response
 rather than raising, because none of these features may block the ordering flow.
 """
 
-import pytest
 
-
-def test_ml_status_lists_all_three_models(client):
+def test_ml_status_lists_the_two_shipped_models(client):
+    """The fit recommender was removed outright, not just hidden — it must not
+    reappear in status. See docs/testing/ml-evaluation.md for why."""
     resp = client.get("/api/ml/status")
     assert resp.status_code == 200
     names = {m["name"] for m in resp.json()["models"]}
-    assert names == {"measurement_predictor", "fit_recommender", "garment_classifier"}
+    assert names == {"measurement_predictor", "garment_classifier"}
+
+
+def test_the_fit_recommender_endpoints_are_gone(client):
+    for path in ("/api/ml/fit-risk", "/api/ml/recommend-size"):
+        assert client.post(path, json={"height": 165, "weight": 61}).status_code == 404
 
 
 def test_suggest_reports_unavailable_rather_than_failing(client):
@@ -41,14 +46,6 @@ def test_validate_reports_unavailable_rather_than_failing(client):
     assert resp.json()["available"] is False
 
 
-def test_fit_risk_reports_unavailable_rather_than_failing(client):
-    resp = client.post("/api/ml/fit-risk", json={"height": 165, "weight": 61, "usual_size": 8})
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["available"] is False
-    assert body["verdict"] is None
-
-
 def test_the_size_sweep_is_no_longer_reachable(client):
     """POST /recommend-size ranked candidate sizes by P(fit) and inverted: at a
     fixed height, sweeping weight 45 -> 105 kg moved the top size 27, 0, 15, 17,
@@ -56,62 +53,6 @@ def test_the_size_sweep_is_no_longer_reachable(client):
     docs/testing/ml-evaluation.md."""
     resp = client.post("/api/ml/recommend-size", json={"height": 165, "weight": 61})
     assert resp.status_code == 404
-
-
-def test_fit_risk_without_a_usual_size_is_still_a_200(client, monkeypatch):
-    """The panel renders before the customer picks a size, so 'no size yet' is a
-    normal state — and it must be answered without loading the artefact."""
-    from app.services import ml as ml_service
-
-    monkeypatch.setattr(ml_service, "fit_available", lambda: True)
-    monkeypatch.setattr(
-        ml_service,
-        "assess_fit_risk",
-        lambda request: pytest.fail("the model must not be loaded when no size was given"),
-    )
-
-    body = client.post("/api/ml/fit-risk", json={"height": 165, "weight": 61}).json()
-    assert body["available"] is True
-    assert body["verdict"] == "no_size_given"
-
-
-@pytest.mark.parametrize("size", [-1, 31, 99])
-def test_fit_risk_rejects_a_size_outside_the_training_sweep(client, size):
-    assert client.post("/api/ml/fit-risk", json={"usual_size": size}).status_code == 422
-
-
-def test_fit_risk_returns_the_typed_verdict(client, monkeypatch):
-    """Exercises the whole router with scikit-learn never touched, by swapping
-    the one service function the endpoint calls."""
-    from app.services import fit as fit_service
-    from app.services import ml as ml_service
-
-    monkeypatch.setattr(ml_service, "fit_available", lambda: True)
-    monkeypatch.setattr(
-        ml_service,
-        "assess_fit_risk",
-        lambda request: fit_service.FitRisk(
-            verdict="runs_small",
-            probabilities={"runs_small": 0.6, "fits": 0.25, "runs_large": 0.15},
-            headline="A size 8 tends to run small on measurements like yours.",
-            detail="Worth double-checking your chest and waist below.",
-            confidence="moderate",
-            caveats=("Trained on rental data.",),
-            inputs_used=("height_cm",),
-            inputs_missing=("bust_band",),
-            usual_size=8.0,
-        ),
-    )
-
-    body = client.post("/api/ml/fit-risk", json={"height": 165, "weight": 61, "usual_size": 8}).json()
-    assert body["verdict"] == "runs_small"
-    assert body["probabilities"] == {"runs_small": 0.6, "fits": 0.25, "runs_large": 0.15}
-    assert body["confidence"] == "moderate"
-    assert body["caveats"] == ["Trained on rental data."]
-    assert body["inputs_missing"] == ["bust_band"]
-    # The contract must never carry a recommended size.
-    assert "recommendations" not in body
-    assert "recommended_size" not in body
 
 
 def test_classify_reports_unavailable_rather_than_failing(client):

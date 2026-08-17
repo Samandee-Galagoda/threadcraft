@@ -150,6 +150,16 @@ export default function OrderSuccess() {
         )}
 
         <div className="order-num">Order {order.order_number}</div>
+        {/* Confirms the receipt went out. The address itself is deliberately
+            not echoed: the order number is the only credential needed to view
+            this page, so printing the customer's email here would leak it to
+            anyone holding a printed order slip. */}
+        {isPaid && (
+          <p className="ai-note" style={{ textAlign: 'center' }}>
+            Your confirmation and receipt — including the price breakdown and design preview —
+            have been emailed to the address you gave at checkout.
+          </p>
+        )}
 
         <div className="timeline-strip">
           {STAGES.map((stage, index) => (

@@ -16,7 +16,7 @@ const STEP_LABELS = ['Cloth', 'Design', 'Material', 'Measure', 'Pricing', 'AI Pr
 
 export default function DesignWizard() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { state, dispatch } = useWizard();
 
   const [clothTypes, setClothTypes] = useState([]);
@@ -35,6 +35,12 @@ export default function DesignWizard() {
   const [placing, setPlacing] = useState(false);
   const [placeError, setPlaceError] = useState(null);
   const [guestEmail, setGuestEmail] = useState('');
+
+  // The confirmation email carries the receipt and the design preview, so the
+  // address has to be right before the order commits — not discovered to be
+  // wrong when nothing arrives. A signed-in customer's account email is taken
+  // as given; a guest's is format-checked here and again by EmailStr server-side.
+  const emailValid = isAuthenticated || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(guestEmail.trim());
 
   const clothType = useMemo(
     () => clothTypes.find((c) => c.id === state.clothTypeId) ?? null,
@@ -188,8 +194,10 @@ export default function DesignWizard() {
 
   async function placeOrder() {
     setPlaceError(null);
-    if (!isAuthenticated && !guestEmail) {
-      setPlaceError('Please enter an email address so we can send your confirmation.');
+    if (!emailValid) {
+      setPlaceError(
+        'Please enter a valid email address — the order confirmation and receipt are sent there.',
+      );
       return;
     }
     setPlacing(true);
@@ -381,22 +389,36 @@ export default function DesignWizard() {
             </button>
           ) : (
             <>
-              {!isAuthenticated && (
-                <div className="field" style={{ marginBottom: 12 }}>
-                  <label htmlFor="guest-email">Email for your confirmation</label>
+              {/* The confirmation, with the full bill and the design preview,
+                  goes to this address. Shown to signed-in customers too — they
+                  should be able to see where it's going before committing, not
+                  discover it afterwards. */}
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label htmlFor="guest-email">Email for your order confirmation</label>
+                {isAuthenticated ? (
+                  <input id="guest-email" type="email" value={user?.email ?? ''} readOnly />
+                ) : (
                   <input
                     id="guest-email"
                     type="email"
                     value={guestEmail}
                     placeholder="you@example.com"
+                    className={guestEmail && !emailValid ? 'has-warning' : ''}
                     onChange={(e) => setGuestEmail(e.target.value)}
                   />
-                </div>
-              )}
+                )}
+                <p className="form-label-hint">
+                  {isAuthenticated
+                    ? 'Your receipt and order updates go to your account email.'
+                    : guestEmail && !emailValid
+                      ? "That doesn't look like an email address."
+                      : "We'll send your receipt, the design preview and every status update here."}
+                </p>
+              </div>
               <button
                 type="button"
                 className="btn-confirm"
-                disabled={placing || generating || !quote}
+                disabled={placing || generating || !quote || !emailValid}
                 onClick={placeOrder}
               >
                 {placing

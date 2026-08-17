@@ -103,12 +103,17 @@ class Settings(BaseSettings):
     mail_from: str = "ThreadCraft <onboarding@resend.dev>"
 
     # Trained ML models on the Hugging Face Hub.
-    # Set HF_USERNAME and the three repo IDs default to the notebooks' output names;
-    # override any of them explicitly if you renamed a repo.
+    # Set HF_USERNAME and the repo IDs default to the notebooks' output names;
+    # override either explicitly if you renamed a repo.
+    #
+    # The size/fit recommender is deliberately absent. It was trained and
+    # published, then withdrawn after both framings failed validation — the size
+    # sweep was non-monotonic and the fit-risk direction was inverted. Sizing is
+    # now the measurement predictor composed with a deterministic chart
+    # (services/sizing.py). See docs/testing/ml-evaluation.md.
     hf_username: str | None = None
     hf_classifier_model: str | None = None
     hf_measurement_model: str | None = None
-    hf_fit_model: str | None = None
     ml_enabled: bool = True  # set False to disable model loading entirely
     # The ViT classifier is ~350 MB — more than a 512 MB free-tier instance can
     # comfortably hold alongside the app, so it is gated separately from the two
@@ -126,12 +131,6 @@ class Settings(BaseSettings):
         if self.hf_measurement_model:
             return self.hf_measurement_model
         return f"{self.hf_username}/threadcraft-measurement-predictor" if self.hf_username else None
-
-    @property
-    def fit_repo(self) -> str | None:
-        if self.hf_fit_model:
-            return self.hf_fit_model
-        return f"{self.hf_username}/threadcraft-fit-recommender" if self.hf_username else None
 
     # Seed data
     admin_email: str = "admin@threadcraft.lk"

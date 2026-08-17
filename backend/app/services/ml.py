@@ -14,14 +14,12 @@ Design points that matter for a free-tier deployment:
   the app. `ML_ENABLE_CLASSIFIER` gates it separately for that reason.
 """
 
-import dataclasses
 import threading
 import time
 from dataclasses import dataclass
 from typing import Any
 
 from app.core.config import settings
-from app.services import fit as fit_service
 
 # How long a failed load is remembered before another attempt is allowed.
 #
@@ -201,100 +199,6 @@ def validate_measurements(customer: dict) -> list[dict] | None:
     return warnings
 
 
-# ── Size / fit recommender ───────────────────────────────────────────────
-
-
-def _load_fit():
-    import joblib
-    from huggingface_hub import hf_hub_download
-
-    path = hf_hub_download(settings.fit_repo, "fit_recommender.joblib")
-    return joblib.load(path)
-
-
-def fit_available() -> bool:
-    return bool(settings.ml_enabled and settings.fit_repo)
-
-
-def _encode_rows(art: dict, rows: list[dict]):
-    """Feature dicts -> the encoded frame the fit model expects.
-
-    Shared so the encoding can never drift between callers: this is where an
-    off-by-one on the ordinal encoder silently corrupts every categorical while
-    still producing confident-looking probabilities.
-    """
-    import numpy as np
-    import pandas as pd
-
-    frame = pd.DataFrame([{k: (np.nan if v is None else v) for k, v in row.items()} for row in rows])
-
-    for col in art["categorical_features"]:
-        frame[col] = frame[col].fillna(art["missing_token"]).astype(str)
-
-    encoded_frame = frame[art["numeric_features"]].astype(float).copy()
-    encoded = art["encoder"].transform(frame[art["categorical_features"]])
-    for i, col in enumerate(art["categorical_features"]):
-        # +1 so the encoder's unknown value (-1) becomes 0 rather than colliding
-        # with the first real category.
-        encoded_frame[col] = encoded[:, i] + 1
-
-    return encoded_frame[art["features"]]
-
-
-def _known_categories(art: dict, column: str) -> set[str]:
-    """The values the encoder was actually fit on, for `column`."""
-    index = list(art["categorical_features"]).index(column)
-    return {str(v) for v in art["encoder"].categories_[index]}
-
-
-def assess_fit_risk(request: dict) -> fit_service.FitRisk | None:
-    """Does the size this customer already wears run small, fit, or run large?
-
-    A single forward pass on one size — deliberately NOT a sweep over candidate
-    sizes. The sweep is non-monotonic against the deployed model (see
-    services/fit.py and docs/testing/ml-evaluation.md), so it was withdrawn.
-    This asks the question the model card names as its intended use.
-
-    Returns None only when the model is unconfigured or failed to load.
-    """
-    if not fit_available():
-        return None
-    art = _load("fit", _load_fit)
-    if art is None:
-        return None
-
-    built = fit_service.build_fit_features(request)
-    features = dict(built.features)
-    caveats = list(built.caveats)
-
-    # The RentTheRunway `category` vocabulary isn't documented anywhere we can
-    # rely on, so the static slug map is checked against what the encoder was
-    # actually fit on. An unrecognised value would land in the unknown bucket,
-    # which the model never saw; falling back to missing keeps it in-distribution.
-    category = features.get("category")
-    if category is not None and category not in _known_categories(art, "category"):
-        features["category"] = None
-
-    size = features.get("size")
-    if size is not None and float(size) not in {float(s) for s in art["candidate_sizes"]}:
-        caveats.append(f"Size {float(size):g} is outside the sizes seen during training.")
-
-    encoded = _encode_rows(art, [features])
-    proba = art["model"].predict_proba(encoded)
-    probabilities = fit_service.probabilities_by_name(list(art["model"].classes_), proba[0])
-
-    result = fit_service.interpret_fit_risk(
-        probabilities,
-        usual_size=float(size) if size is not None else None,
-        caveats=(fit_service.BASE_CAVEAT, *caveats),
-    )
-    return dataclasses.replace(
-        result,
-        inputs_used=tuple(built.used),
-        inputs_missing=tuple(built.missing),
-    )
-
-
 # ── Garment classifier ───────────────────────────────────────────────────
 
 
@@ -344,7 +248,6 @@ def _status_for(name: str, display_name: str, repo: str | None) -> ModelStatus:
 def status() -> list[ModelStatus]:
     return [
         _status_for("measurement", "measurement_predictor", settings.measurement_repo),
-        _status_for("fit", "fit_recommender", settings.fit_repo),
         _status_for(
             "classifier",
             "garment_classifier",
@@ -359,8 +262,6 @@ def warm_up() -> dict:
     results = {}
     if measurement_available():
         results["measurement_predictor"] = _load("measurement", _load_measurement) is not None
-    if fit_available():
-        results["fit_recommender"] = _load("fit", _load_fit) is not None
     if classifier_available():
         results["garment_classifier"] = _load("classifier", _load_classifier) is not None
     return results
