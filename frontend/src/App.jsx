@@ -1,6 +1,7 @@
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WizardProvider } from './context/WizardContext';
+import About from './pages/About';
 import Auth from './pages/Auth';
 
 import DesignWizard from './pages/DesignWizard';
@@ -76,6 +77,7 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
           <Route path="/auth" element={<Auth />} />
           <Route
             path="/dashboard"
