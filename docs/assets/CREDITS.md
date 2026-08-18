@@ -15,3 +15,15 @@ repository is traceable.
 All three were requested from the Pexels CDN pre-cropped to the aspect ratio the
 layout uses, rather than downloaded full-size and cropped in CSS — 188 KB for
 the set, against ~630 KB for the same images at their native 1400×2100.
+
+## How-it-works step images
+
+| File | Pexels photo | Subject |
+|---|---|---|
+| `frontend/public/img/step-design.jpg` | [7147468](https://www.pexels.com/photo/7147468/) | Garment sketches pinned beside fabric |
+| `frontend/public/img/step-material.jpg` | [4614195](https://www.pexels.com/photo/4614195/) | Fabric samples on a design board |
+| `frontend/public/img/step-pricing.jpg` | [8030142](https://www.pexels.com/photo/8030142/) | Fabric swatches laid out with a tablet |
+| `frontend/public/img/step-preview.jpg` | [7147552](https://www.pexels.com/photo/7147552/) | Fabric samples beside sketches in an atelier |
+
+Steps 1 and 4 reuse `tshirt.jpg` and `measurement-guide.jpg`, which the repo
+already carried, rather than downloading near-duplicates.

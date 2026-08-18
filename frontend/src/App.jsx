@@ -5,6 +5,7 @@ import About from './pages/About';
 import Auth from './pages/Auth';
 
 import DesignWizard from './pages/DesignWizard';
+import HowItWorks from './pages/HowItWorks';
 import Home from './pages/Home';
 import MeasurementGuide from './pages/MeasurementGuide';
 import NotFound from './pages/NotFound';
@@ -78,6 +79,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="/auth" element={<Auth />} />
           <Route
             path="/dashboard"

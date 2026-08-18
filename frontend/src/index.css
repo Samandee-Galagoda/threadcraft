@@ -809,6 +809,32 @@ footer { background:var(--dark); color:#c4a882; padding:48px; display:grid; grid
 .about-stats strong { display:block; font-family:var(--serif); font-size:44px; font-weight:300; color:var(--cream); line-height:1; }
 .about-stats span { font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--taupe); }
 
+.hiw-row { display:grid; grid-template-columns:1fr 1fr; gap:56px; align-items:center; padding:56px 48px; background:var(--cream); }
+.hiw-row:nth-child(even) { background:var(--warm); }
+/* Alternating sides so the eye zig-zags down the page rather than running in
+   one column. `order` rather than a second grid definition, so the DOM order
+   stays the reading order for screen readers and for the stacked layout. */
+.hiw-row.reverse .hiw-row-img { order:2; }
+.hiw-row-img { overflow:hidden; background:var(--sand); }
+.hiw-row-img img { width:100%; aspect-ratio:3/2; object-fit:cover; display:block; }
+.hiw-row-num { font-family:var(--serif); font-size:13px; letter-spacing:.3em; color:var(--taupe); margin-bottom:10px; }
+.hiw-row-copy h2 { font-family:var(--serif); font-size:36px; font-weight:300; color:var(--dark); margin-bottom:12px; }
+.hiw-row-lead { font-size:15px; color:var(--brown); letter-spacing:.02em; margin-bottom:14px; font-family:var(--serif); font-style:italic; }
+.hiw-row-copy p { font-size:13px; color:var(--text); line-height:1.9; margin-bottom:12px; }
+.hiw-row-detail { font-size:11px !important; color:var(--taupe) !important; letter-spacing:.08em; border-left:2px solid var(--sand); padding-left:14px; margin-bottom:0 !important; }
+
+/* Fabric catalogue dialog */
+.cat-row { display:flex; gap:16px; padding:14px 0; border-bottom:.5px solid var(--sand); }
+.cat-row:last-of-type { border-bottom:none; }
+.cat-swatch { width:52px; height:52px; flex-shrink:0; border:.5px solid var(--sand); }
+.cat-detail { flex:1; min-width:0; }
+.cat-name { font-size:14px; color:var(--dark); display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.cat-price { font-family:var(--serif); font-size:14px; color:var(--brown); white-space:nowrap; }
+.cat-colours { display:flex; flex-wrap:wrap; gap:8px 14px; }
+.cat-colour { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text); letter-spacing:.02em; }
+.cat-colour em { font-size:10px; color:var(--taupe); font-style:normal; }
+.cat-none { font-size:11px; color:var(--taupe); font-style:italic; }
+
 /* ── RESPONSIVE ───────────────────────────────────────────── */
 @media (max-width:1100px) {
   .wizard, .mockup-page { grid-template-columns:1fr; }
@@ -825,7 +851,9 @@ footer { background:var(--dark); color:#c4a882; padding:48px; display:grid; grid
   .portal-sidebar { border-right:none; border-bottom:.5px solid var(--sand); }
   .portal-nav { display:flex; overflow-x:auto; }
   .portal-main { padding:28px 20px; }
-  .hero, .auth-wrap, .ai-banner, .grid-2, .about-split { grid-template-columns:1fr; }
+  .hero, .auth-wrap, .ai-banner, .grid-2, .about-split, .hiw-row { grid-template-columns:1fr; }
+  .hiw-row { gap:28px; padding:36px 20px; }
+  .hiw-row.reverse .hiw-row-img { order:0; }
   .about-split { padding-left:20px; padding-right:20px; }
   .cloth-grid, .cloth-select-grid { grid-template-columns:repeat(2,1fr); }
   .mat-grid { grid-template-columns:repeat(3,1fr); }

@@ -11,7 +11,7 @@ export default function Footer() {
         <div className="footer-col">
           <h4>Design</h4>
           <ul>
-            <li>Start designing</li><li>Cloth types</li><li>Materials</li><li>How it works</li>
+            <li>Start designing</li><li>Cloth types</li><li>Materials</li><li><Link to="/how-it-works">How it works</Link></li>
           </ul>
         </div>
         <div className="footer-col">
