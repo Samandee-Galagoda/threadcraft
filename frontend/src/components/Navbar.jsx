@@ -38,7 +38,7 @@ export default function Navbar({ backLink = false, secure = false }) {
       ) : (
         <div style={{display: 'flex', alignItems: 'center', gap: '20px'}}>
           <ul className="nav-links" style={{margin: 0}}>
-            <li><Link to="/#about">About</Link></li>
+            <li><Link to="/about">About</Link></li>
             {isAuthenticated ? (
               <li>
                 {/* One entry point for both roles — signing in routes an admin
