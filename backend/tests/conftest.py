@@ -105,7 +105,16 @@ def seeded_catalog(db_session):
     db_session.add(material)
     db_session.flush()
 
-    color = MaterialColor(material_id=material.id, name="Ivory", hex_code="#F5F0E8", ai_prompt_term="ivory")
+    # Stock lives on the colourway, so the fixture has to carry it — the
+    # material-level figure above is only used by materials with no colours.
+    color = MaterialColor(
+        material_id=material.id,
+        name="Ivory",
+        hex_code="#F5F0E8",
+        ai_prompt_term="ivory",
+        stock_metres=10,
+        low_stock_threshold=2,
+    )
     db_session.add(color)
 
     group = DesignOptionGroup(cloth_type_id=None, code="sleeve", label="Sleeve", selection_type="single")

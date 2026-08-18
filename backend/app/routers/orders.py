@@ -42,10 +42,14 @@ def create_order(
             detail="guest_email is required for orders placed without an account",
         )
 
-    if material.stock_metres < breakdown.fabric_metres:
+    # Checked and decremented against the colourway when one was chosen, since
+    # that is where the cloth actually is.
+    holder = orders_service.stock_holder(material, color)
+    holder_name = f"{color.name} {material.name}" if color else material.name
+    if holder.stock_metres < breakdown.fabric_metres:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Not enough {material.name} in stock for this order",
+            detail=f"Not enough {holder_name} in stock for this order",
         )
 
     order = Order(
@@ -83,7 +87,7 @@ def create_order(
     db.flush()  # assigns order.id without committing, so status history + stock updates are atomic
 
     orders_service.record_status_change(db, order, "received", changed_by_user_id=None)
-    material.stock_metres = Decimal(str(material.stock_metres)) - breakdown.fabric_metres
+    holder.stock_metres = Decimal(str(holder.stock_metres)) - breakdown.fabric_metres
 
     if payload.draft_id:
         db.query(OrderReferenceImage).filter(

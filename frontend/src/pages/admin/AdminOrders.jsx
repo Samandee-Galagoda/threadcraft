@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { AdminHeader } from './AdminLayout';
 import { admin, mediaUrl } from '../../api';
 
 const STAGES = ['received', 'fabric_cut', 'stitching', 'qc', 'dispatched'];
@@ -69,77 +70,82 @@ export default function AdminOrders() {
 
   return (
     <>
-      <div className="portal-header">
-        <h1>Orders</h1>
-        <p>{orders.length} order{orders.length === 1 ? '' : 's'}</p>
-      </div>
+      <AdminHeader
+        title="Orders"
+        subtitle={`${orders.length} order${orders.length === 1 ? '' : 's'}`}
+      />
+      <div className="admin-content">
+        {notice && <div className="admin-alert">{notice}</div>}
+        {error && <div className="wizard-error">{error}</div>}
 
-      {notice && <div className="admin-alert">{notice}</div>}
-      {error && <div className="wizard-error">{error}</div>}
-
-      <div className="filter-chips">
-        <button type="button" className={filter === '' ? 'active' : ''} onClick={() => setFilter('')}>
-          All
-        </button>
-        {[...STAGES, 'cancelled'].map((stage) => (
+        <div className="filter-chips">
           <button
             type="button"
-            key={stage}
-            className={filter === stage ? 'active' : ''}
-            onClick={() => setFilter(stage)}
+            className={filter === '' ? 'active' : ''}
+            onClick={() => setFilter('')}
           >
-            {LABELS[stage]}
+            All
           </button>
-        ))}
-      </div>
+          {[...STAGES, 'cancelled'].map((stage) => (
+            <button
+              type="button"
+              key={stage}
+              className={filter === stage ? 'active' : ''}
+              onClick={() => setFilter(stage)}
+            >
+              {LABELS[stage]}
+            </button>
+          ))}
+        </div>
 
-      <div className="card">
-        {orders.length === 0 ? (
-          <p className="admin-empty">No orders match this filter.</p>
-        ) : (
-          orders.map((order) => (
-            <div className="order-item" key={order.id}>
-              <div className="order-info">
-                <div className="order-name">{order.cloth_type_name}</div>
-                <div className="order-detail">
-                  {order.order_number} · {order.material_name}
-                  {order.color_name ? ` · ${order.color_name}` : ''}
+        <div className="card">
+          {orders.length === 0 ? (
+            <p className="admin-empty">No orders match this filter.</p>
+          ) : (
+            orders.map((order) => (
+              <div className="order-item" key={order.id}>
+                <div className="order-info">
+                  <div className="order-name">{order.cloth_type_name}</div>
+                  <div className="order-detail">
+                    {order.order_number} · {order.material_name}
+                    {order.color_name ? ` · ${order.color_name}` : ''}
+                  </div>
+                  <div className="order-meta">
+                    <span className="order-date">
+                      {new Date(order.created_at).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </span>
+                    <span className={`status-pill sp-${order.status.replace('_', '-')}`}>
+                      {LABELS[order.status] ?? order.status}
+                    </span>
+                    <span className={`status-pill sp-${order.payment_status}`}>
+                      {order.payment_status}
+                    </span>
+                  </div>
                 </div>
-                <div className="order-meta">
-                  <span className="order-date">
-                    {new Date(order.created_at).toLocaleDateString('en-GB', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </span>
-                  <span className={`status-pill sp-${order.status.replace('_', '-')}`}>
-                    {LABELS[order.status] ?? order.status}
-                  </span>
-                  <span className={`status-pill sp-${order.payment_status}`}>
-                    {order.payment_status}
-                  </span>
+                <div className="order-price">{money(order.price_total)}</div>
+                <div className="order-actions">
+                  <button type="button" className="oa-btn" onClick={() => setSelected(order)}>
+                    Details
+                  </button>
                 </div>
               </div>
-              <div className="order-price">{money(order.price_total)}</div>
-              <div className="order-actions">
-                <button type="button" className="oa-btn" onClick={() => setSelected(order)}>
-                  Details
-                </button>
-              </div>
-            </div>
-          ))
+            ))
+          )}
+        </div>
+
+        {selected && (
+          <OrderDrawer
+            order={selected}
+            busy={busy}
+            onClose={() => setSelected(null)}
+            onAdvance={advance}
+          />
         )}
       </div>
-
-      {selected && (
-        <OrderDrawer
-          order={selected}
-          busy={busy}
-          onClose={() => setSelected(null)}
-          onAdvance={advance}
-        />
-      )}
     </>
   );
 }

@@ -28,18 +28,22 @@ def _payload(seeded_catalog, **overrides):
     return payload
 
 
-def _stock(db_session, material_id):
-    from app.models.catalog import Material
+def _stock(db_session, colour_id):
+    """Stock is held on the colourway, so that is what a cancellation must
+    credit back."""
+    from app.models.catalog import MaterialColor
 
     db_session.expire_all()
-    return Decimal(str(db_session.query(Material).filter(Material.id == material_id).first().stock_metres))
+    return Decimal(
+        str(db_session.query(MaterialColor).filter(MaterialColor.id == colour_id).first().stock_metres)
+    )
 
 
 # ── stock restoration ────────────────────────────────────────────────────────
 
 
 def test_cancelling_returns_the_fabric_to_stock(client, seeded_catalog, db_session):
-    material_id = seeded_catalog["material"].id
+    material_id = seeded_catalog["color"].id
     before = _stock(db_session, material_id)
 
     order = client.post("/api/orders", json=_payload(seeded_catalog, guest_email="guest@example.com")).json()
@@ -60,7 +64,7 @@ def test_admin_cancellation_also_returns_stock(client, seeded_catalog, admin_use
     other. This asserts the admin path gets it for free."""
     from app.models.order import Order
 
-    material_id = seeded_catalog["material"].id
+    material_id = seeded_catalog["color"].id
     before = _stock(db_session, material_id)
 
     order_number = client.post(
@@ -81,7 +85,7 @@ def test_cancelling_after_cutting_does_not_restock(client, seeded_catalog, admin
     a write-off. Restocking it would silently inflate inventory."""
     from app.models.order import Order
 
-    material_id = seeded_catalog["material"].id
+    material_id = seeded_catalog["color"].id
     headers = auth_headers(client, "admin@example.com", "adminpass123")
 
     order_number = client.post(
@@ -179,7 +183,7 @@ def test_cancelling_twice_is_rejected(client, seeded_catalog, db_session):
     """Guards the restock: cancelled is terminal, which is what makes returning
     fabric unconditional in transition_status safe. If a second cancellation
     succeeded, the stock would be credited twice."""
-    material_id = seeded_catalog["material"].id
+    material_id = seeded_catalog["color"].id
     order = client.post("/api/orders", json=_payload(seeded_catalog, guest_email="guest@example.com")).json()
     body = {"guest_email": "guest@example.com"}
 

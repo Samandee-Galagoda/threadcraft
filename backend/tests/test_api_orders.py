@@ -87,23 +87,25 @@ def test_price_is_recomputed_server_side_and_ignores_client_hints(client, seeded
 
 
 def test_stock_decrements_on_order_creation(client, seeded_catalog, db_session):
-    from app.models.catalog import Material
+    """Against the colourway, not the material — a tailor runs out of ivory
+    linen, not of linen."""
+    from app.models.catalog import MaterialColor
 
-    before = db_session.query(Material).filter(Material.id == seeded_catalog["material"].id).first()
+    before = db_session.query(MaterialColor).filter(MaterialColor.id == seeded_catalog["color"].id).first()
     stock_before = Decimal(str(before.stock_metres))
 
     client.post("/api/orders", json=_order_payload(seeded_catalog, guest_email="guest@example.com"))
 
     db_session.expire_all()
-    after = db_session.query(Material).filter(Material.id == seeded_catalog["material"].id).first()
+    after = db_session.query(MaterialColor).filter(MaterialColor.id == seeded_catalog["color"].id).first()
     assert Decimal(str(after.stock_metres)) == stock_before - Decimal("1.40")
 
 
 def test_insufficient_stock_rejected(client, seeded_catalog, db_session):
-    from app.models.catalog import Material
+    from app.models.catalog import MaterialColor
 
-    material = db_session.query(Material).filter(Material.id == seeded_catalog["material"].id).first()
-    material.stock_metres = Decimal("0.5")  # less than the 1.4m this order needs
+    colour = db_session.query(MaterialColor).filter(MaterialColor.id == seeded_catalog["color"].id).first()
+    colour.stock_metres = Decimal("0.5")  # less than the 1.4m this order needs
     db_session.commit()
 
     resp = client.post("/api/orders", json=_order_payload(seeded_catalog, guest_email="guest@example.com"))

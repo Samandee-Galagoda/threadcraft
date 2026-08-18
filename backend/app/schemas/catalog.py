@@ -47,6 +47,14 @@ class MaterialColorOut(BaseModel):
     name: str
     hex_code: str
     surcharge: Decimal
+    # Stock is per colourway: a tailor runs out of burgundy silk, not of silk.
+    stock_metres: Decimal
+    low_stock_threshold: Decimal
+
+    @computed_field
+    @property
+    def is_low_stock(self) -> bool:
+        return self.stock_metres <= self.low_stock_threshold
 
 
 class MaterialOut(BaseModel):
@@ -64,7 +72,18 @@ class MaterialOut(BaseModel):
     @computed_field
     @property
     def is_low_stock(self) -> bool:
+        """True when the material as a whole is short, or any single colourway
+        is. A material with 100 m spread over six colours can still be unable to
+        fulfil an order for the one colour a customer wants."""
+        if self.colors:
+            return any(c.is_low_stock for c in self.colors)
         return self.stock_metres <= self.low_stock_threshold
+
+    @computed_field
+    @property
+    def total_stock_metres(self) -> Decimal:
+        """Sum across colourways, which is where the cloth actually is."""
+        return sum((c.stock_metres for c in self.colors), Decimal("0")) if self.colors else self.stock_metres
 
 
 class AdminMaterialOut(MaterialOut):
