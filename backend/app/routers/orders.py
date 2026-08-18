@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import get_optional_user
 from app.db.session import get_db
+from app.models.catalog import ClothType, DesignOption, Material
 from app.models.order import Order, OrderReferenceImage
 from app.models.user import User
-from app.schemas.order import OrderCancel, OrderCreate, OrderOut
+from app.schemas.order import OrderCancel, OrderCreate, OrderOut, ReorderPlan
 from app.services import catalog as catalog_service
 from app.services import orders as orders_service
 
@@ -121,6 +122,77 @@ def my_orders(
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Login required")
     return db.query(Order).filter(Order.user_id == current_user.id).order_by(Order.created_at.desc()).all()
+
+
+@router.get("/{order_number}/reorder", response_model=ReorderPlan)
+def reorder_plan(
+    order_number: str,
+    current_user: User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    """Re-resolve a past order against the *current* catalogue.
+
+    Done server-side rather than by handing the client the old ids, because a
+    past order is a snapshot: its garment may have been deactivated, its fabric
+    withdrawn, a colourway discontinued. Replaying stale ids would either 404 at
+    checkout or silently reorder something that no longer exists.
+
+    Design options are matched by their snapshot `code`, not by id — ids were
+    never recorded in the snapshot, and a code survives an option being
+    recreated. Anything that cannot be resolved is named in `unavailable` so the
+    customer is told what changed instead of quietly getting a different garment.
+    """
+    order = db.query(Order).filter(Order.order_number == order_number).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.user_id is not None and (not current_user or current_user.id != order.user_id):
+        raise HTTPException(status_code=403, detail="This order belongs to another account")
+
+    unavailable: list[str] = []
+
+    cloth_type = (
+        db.query(ClothType).filter(ClothType.id == order.cloth_type_id, ClothType.is_active.is_(True)).first()
+    )
+    if not cloth_type:
+        unavailable.append(order.cloth_type_name)
+
+    material = (
+        db.query(Material).filter(Material.id == order.material_id, Material.is_active.is_(True)).first()
+    )
+    if not material:
+        unavailable.append(order.material_name)
+
+    colour = None
+    if order.material_color_id and material:
+        colour = next((c for c in material.colors if c.id == order.material_color_id and c.is_active), None)
+        if not colour and order.color_name:
+            unavailable.append(order.color_name)
+
+    codes = [entry.get("code") for entry in (order.design_options_snapshot or []) if entry.get("code")]
+    option_ids: list[int] = []
+    if codes:
+        found = (
+            db.query(DesignOption)
+            .filter(DesignOption.code.in_(codes), DesignOption.is_active.is_(True))
+            .all()
+        )
+        by_code = {o.code: o for o in found}
+        for entry in order.design_options_snapshot or []:
+            match = by_code.get(entry.get("code"))
+            if match:
+                option_ids.append(match.id)
+            elif entry.get("label"):
+                unavailable.append(entry["label"])
+
+    return ReorderPlan(
+        cloth_type_id=cloth_type.id if cloth_type else None,
+        cloth_type_slug=cloth_type.slug if cloth_type else None,
+        material_id=material.id if material else None,
+        material_color_id=colour.id if colour else None,
+        design_option_ids=option_ids,
+        measurements=order.measurements_snapshot or {},
+        unavailable=unavailable,
+    )
 
 
 @router.post("/{order_number}/cancel", response_model=OrderOut)

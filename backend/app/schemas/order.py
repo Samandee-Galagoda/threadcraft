@@ -100,6 +100,20 @@ class AdminOrderOut(OrderOut):
     updated_at: datetime.datetime | None = None
 
 
+class ReorderPlan(BaseModel):
+    """A past order re-resolved against the current catalogue, ready to load
+    into the wizard. Anything discontinued is named in `unavailable` rather than
+    silently dropped."""
+
+    cloth_type_id: int | None = None
+    cloth_type_slug: str | None = None
+    material_id: int | None = None
+    material_color_id: int | None = None
+    design_option_ids: list[int] = Field(default_factory=list)
+    measurements: dict = Field(default_factory=dict)
+    unavailable: list[str] = Field(default_factory=list)
+
+
 class SavedDesignCreate(BaseModel):
     name: str
     cloth_type_id: int | None = None

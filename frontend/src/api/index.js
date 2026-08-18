@@ -41,6 +41,11 @@ export const pricing = {
 // ── Orders ────────────────────────────────────────────────────────────────
 export const orders = {
   create: (payload) => api.post('/api/orders', payload),
+  // Re-resolved server-side against the live catalogue, so a discontinued
+  // fabric or option is reported rather than replayed as a stale id.
+  reorderPlan: (orderNumber) => api.get(`/api/orders/${orderNumber}/reorder`),
+  cancel: (orderNumber, body = {}) =>
+    api.post(`/api/orders/${orderNumber}/cancel`, body, { auth: true }),
   track: (orderNumber) => api.get(`/api/orders/track/${orderNumber}`, { auth: false }),
   mine: () => api.get('/api/orders/me'),
 };
@@ -51,10 +56,12 @@ export const dashboard = {
 };
 
 export const measurements = {
-  save: (payload) => api.put('/api/measurements', payload),
+  load: () => api.get('/api/measurements'),
+  save: (values) => api.put('/api/measurements', { values }),
 };
 
 export const designs = {
+  remove: (id) => api.del(`/api/designs/${id}`),
   list: () => api.get('/api/designs'),
   save: (payload) => api.post('/api/designs', payload),
 };
