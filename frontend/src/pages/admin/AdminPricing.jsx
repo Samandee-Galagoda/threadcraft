@@ -207,58 +207,60 @@ export default function AdminPricing() {
                         </td>
                         <td style={{ color: 'var(--taupe)' }}>{option.ai_prompt_term}</td>
                         <td>
-                          {isEditing ? (
-                            <>
-                              <button
-                                type="button"
-                                className="oa-btn"
-                                onClick={async () => {
-                                  const ok = await run(
-                                    () => admin.updateOption(option.id, optionDraft),
-                                    `${option.label} updated — new quotes use it immediately.`,
-                                  );
-                                  if (ok) setEditing(null);
-                                }}
-                              >
-                                Save
-                              </button>
-                              <button
-                                type="button"
-                                className="oa-btn"
-                                onClick={() => setEditing(null)}
-                              >
-                                Cancel
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                className="oa-btn"
-                                onClick={() => {
-                                  setEditing(option.id);
-                                  setOptionDraft({
-                                    stitching_premium: String(option.stitching_premium),
-                                    fabric_multiplier: String(option.fabric_multiplier),
-                                  });
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                className="oa-btn"
-                                onClick={() =>
-                                  run(
-                                    () => admin.deactivateOption(option.id),
-                                    `${option.label} withdrawn from the wizard.`,
-                                  )
-                                }
-                              >
-                                Remove
-                              </button>
-                            </>
-                          )}
+                          <span className="row-actions">
+                            {isEditing ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="oa-btn"
+                                  onClick={async () => {
+                                    const ok = await run(
+                                      () => admin.updateOption(option.id, optionDraft),
+                                      `${option.label} updated — new quotes use it immediately.`,
+                                    );
+                                    if (ok) setEditing(null);
+                                  }}
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  className="oa-btn"
+                                  onClick={() => setEditing(null)}
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  className="oa-btn"
+                                  onClick={() => {
+                                    setEditing(option.id);
+                                    setOptionDraft({
+                                      stitching_premium: String(option.stitching_premium),
+                                      fabric_multiplier: String(option.fabric_multiplier),
+                                    });
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className="oa-btn"
+                                  onClick={() =>
+                                    run(
+                                      () => admin.deactivateOption(option.id),
+                                      `${option.label} withdrawn from the wizard.`,
+                                    )
+                                  }
+                                >
+                                  Remove
+                                </button>
+                              </>
+                            )}
+                          </span>
                         </td>
                       </tr>
                     );
