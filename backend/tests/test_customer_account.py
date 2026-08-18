@@ -170,3 +170,40 @@ def test_the_reorder_plan_carries_no_price(client, registered_user, seeded_catal
     plan = client.get(f"/api/orders/{order['order_number']}/reorder", headers=_customer(client)).json()
     assert not any("price" in key or "total" in key for key in plan)
     assert Decimal(order["price_total"]) > 0  # the order itself still has one
+
+
+# ── measurement guide ────────────────────────────────────────────────────────
+
+
+def test_every_garment_has_letters_and_instructions_for_its_guide(client, seeded_catalog):
+    """The measurement guide is driven by this payload rather than a hardcoded
+    copy — the previous version had drifted, listing a "Blouse" the shop does
+    not sell and leaving four of nine tabs empty. A field with no letter cannot
+    be drawn on the body diagram, and one with no instructions is a guide entry
+    that guides nobody."""
+    from app.models.catalog import ClothType, MeasurementField
+    from tests.conftest import TestSessionLocal
+
+    db = TestSessionLocal()
+    try:
+        garments = db.query(ClothType).filter(ClothType.is_active.is_(True)).all()
+        assert garments, "expected at least one garment"
+        for garment in garments:
+            fields = db.query(MeasurementField).filter(MeasurementField.cloth_type_id == garment.id).all()
+            for field in fields:
+                assert field.letter, f"{garment.slug}.{field.field_key} has no diagram letter"
+                assert field.instructions, f"{garment.slug}.{field.field_key} has no instructions"
+            letters = [f.letter for f in fields]
+            assert len(letters) == len(set(letters)), f"{garment.slug} reuses a diagram letter"
+    finally:
+        db.close()
+
+
+def test_the_guide_payload_is_public(client, seeded_catalog):
+    """The guide is a marketing page — it must render for a visitor who has
+    never signed in."""
+    resp = client.get("/api/catalog/cloth-types")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body
+    assert "measurement_fields" in body[0]

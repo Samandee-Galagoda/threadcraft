@@ -353,10 +353,6 @@ footer { background:var(--dark); color:#c4a882; padding:48px; display:grid; grid
 .td-range { width:90px; text-align:right; }
 .td-range .range-val { font-family:var(--serif); font-size:13px; color:var(--brown); }
 .td-range .range-unit { font-size:9px; letter-spacing:.1em; color:var(--taupe); text-transform:uppercase; display:block; }
-.td-input { width:80px; }
-.td-input input { width:100%; border:.5px solid var(--sand); background:var(--cream); padding:7px 8px; font-family:var(--serif); font-size:15px; color:var(--dark); outline:none; text-align:center; transition:border-color .2s; }
-.td-input input:focus { border-color:var(--brown); }
-.active-row .td-input input { border-color:var(--taupe); background:var(--warm); }
 
 .table-footer { margin-top:24px; padding:16px 20px; background:var(--warm); border:.5px solid var(--sand); font-size:11px; color:var(--text); line-height:1.7; }
 .table-footer strong { color:var(--brown); font-weight:500; }
@@ -835,9 +831,35 @@ footer { background:var(--dark); color:#c4a882; padding:48px; display:grid; grid
 .cat-colour em { font-size:10px; color:var(--taupe); font-style:normal; }
 .cat-none { font-size:11px; color:var(--taupe); font-style:italic; }
 
+.body-diagram { width:100%; max-width:280px; display:block; margin:0 auto; overflow:visible; }
+.bd-fill { fill:#f0e8e0; stroke:var(--dark); stroke-width:1; stroke-linejoin:round; }
+.bd-line { stroke:var(--dark); stroke-width:.7; fill:none; }
+.bd-dash { stroke:var(--dark); stroke-width:.6; fill:none; stroke-dasharray:4 3; }
+
+/* A measurement mark: the guide line, its end ticks, and the letter badge.
+   Everything sits at low contrast until selected, so the figure reads as a body
+   first and an instruction sheet second. */
+.bd-mark .bd-guide { stroke:var(--taupe); stroke-width:1; fill:none; stroke-dasharray:3 2; opacity:.55; transition:all .2s; }
+.bd-mark .bd-tick { stroke:var(--taupe); stroke-width:1.2; opacity:.55; transition:all .2s; }
+.bd-mark .bd-badge circle { fill:var(--cream); stroke:var(--taupe); stroke-width:1; cursor:pointer; transition:all .2s; }
+.bd-mark .bd-badge text { font-family:var(--serif); font-size:11px; fill:var(--brown); pointer-events:none; }
+.bd-mark:hover .bd-badge circle { stroke:var(--brown); }
+.bd-mark.active .bd-guide,
+.bd-mark.active .bd-tick { stroke:var(--brown); opacity:1; stroke-width:1.6; stroke-dasharray:none; }
+.bd-mark.active .bd-badge circle { fill:var(--dark); stroke:var(--dark); }
+.bd-mark.active .bd-badge text { fill:var(--cream); }
+
+.figure-note { margin-top:20px; padding:14px 16px; border:.5px solid var(--sand); background:var(--warm); }
+.figure-note-label { font-size:9px; letter-spacing:.2em; text-transform:uppercase; color:var(--taupe); margin-bottom:8px; }
+.figure-note p { font-size:11px; color:var(--text); line-height:1.7; }
+
+.guide-actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:24px; }
+
 /* ── RESPONSIVE ───────────────────────────────────────────── */
 @media (max-width:1100px) {
-  .wizard, .mockup-page { grid-template-columns:1fr; }
+  .wizard, .mockup-page, .chart-wrap { grid-template-columns:1fr; }
+  .figure-col { position:static; }
+  .panel { padding:28px 20px; }
   .wizard-sidebar { position:static; }
   .mat-grid { grid-template-columns:repeat(4,1fr); }
   .hiw-steps, .steps-row { grid-template-columns:repeat(3,1fr); }
