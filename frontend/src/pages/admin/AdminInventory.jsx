@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
+import { AdminHeader } from './AdminLayout';
 import { admin } from '../../api';
+import { moneyExact } from '../../lib/adminFormat';
 
+/** Stock is held per colourway, so this screen edits colours rather than
+ *  materials: a tailor runs out of burgundy silk, not of silk. */
 export default function AdminInventory() {
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState('');
-  const [notice, setNotice] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -24,7 +28,7 @@ export default function AdminInventory() {
     load();
   }, [load]);
 
-  async function save(material) {
+  async function save(colour) {
     const value = Number(draft);
     if (Number.isNaN(value) || value < 0) {
       setError('Stock must be a number of metres, zero or more.');
@@ -32,8 +36,8 @@ export default function AdminInventory() {
     }
     setError(null);
     try {
-      await admin.updateStock(material.id, value);
-      setNotice(`${material.name} stock set to ${value} m.`);
+      await admin.updateColourStock(colour.id, value);
+      setNotice(`${colour.name} stock set to ${value} m.`);
       setEditing(null);
       await load();
     } catch (err) {
@@ -41,126 +45,130 @@ export default function AdminInventory() {
     }
   }
 
-  if (loading) return <div className="wizard-loading">Loading inventory…</div>;
+  if (loading) return <div className="admin-content wizard-loading">Loading inventory…</div>;
 
-  const lowCount = materials.filter((m) => m.is_low_stock).length;
+  const lowColours = materials.flatMap((m) => (m.colors || []).filter((c) => c.is_low_stock));
 
   return (
     <>
-      <div className="portal-header">
-        <h1>Inventory</h1>
-        <p>
-          {materials.length} materials · {lowCount} at or below threshold
-        </p>
-      </div>
+      <AdminHeader
+        title="Inventory"
+        subtitle={`${materials.length} materials · ${lowColours.length} colourway${
+          lowColours.length === 1 ? '' : 's'
+        } at or below threshold`}
+      />
 
-      {notice && <div className="admin-alert">{notice}</div>}
-      {error && <div className="wizard-error">{error}</div>}
+      <div className="admin-content">
+        {notice && <div className="admin-alert">{notice}</div>}
+        {error && <div className="wizard-error">{error}</div>}
 
-      <div className="card">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Material</th>
-              <th>Cost / m</th>
-              <th>In stock</th>
-              <th>Threshold</th>
-              <th>Status</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {materials.map((material) => {
-              const stock = Number(material.stock_metres);
-              const threshold = Number(material.low_stock_threshold);
-              // Bar is relative to twice the threshold, so "at threshold" sits
-              // visually at the halfway point rather than looking full or empty.
-              const pct = Math.max(0, Math.min(100, (stock / (threshold * 2 || 1)) * 100));
-              return (
-                <tr key={material.id}>
-                  <td>
-                    <div className="table-material">
-                      <span
-                        className="mat-dot"
-                        style={{ background: material.swatch_css || '#E8D5C0' }}
-                      />
-                      {material.name}
-                    </div>
-                  </td>
-                  <td>LKR {Number(material.cost_per_metre).toLocaleString()}</td>
-                  <td>
-                    {editing === material.id ? (
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        className="inline-input"
-                        value={draft}
-                        autoFocus
-                        onChange={(e) => setDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') save(material);
-                          if (e.key === 'Escape') setEditing(null);
-                        }}
-                      />
-                    ) : (
-                      <>
-                        <div className="stock-bar">
+        {lowColours.length > 0 && (
+          <div className="admin-alert warn">
+            Running low: {lowColours.map((c) => c.name).join(', ')}. Stock decrements automatically
+            as orders are placed, and a colourway at zero is refused at checkout.
+          </div>
+        )}
+
+        {materials.map((material) => {
+          const total = (material.colors || []).reduce((sum, c) => sum + Number(c.stock_metres), 0);
+          return (
+            <div className="admin-card" style={{ marginBottom: 20 }} key={material.id}>
+              <div className="admin-card-title">
+                <span>
+                  {material.name}
+                  {!material.is_active && ' · inactive'}
+                </span>
+                <span style={{ color: 'var(--taupe)', letterSpacing: '.06em' }}>
+                  {total.toFixed(1)} m total · {moneyExact(material.cost_per_metre)}/m
+                </span>
+              </div>
+
+              {(material.colors || []).length === 0 ? (
+                <p className="admin-empty-row">
+                  No colourways — this material&apos;s stock is tracked as a single pool.
+                </p>
+              ) : (
+                material.colors.map((colour) => {
+                  const stock = Number(colour.stock_metres);
+                  const threshold = Number(colour.low_stock_threshold);
+                  const level =
+                    stock <= threshold / 2 ? 'critical' : stock <= threshold ? 'low' : '';
+                  // Relative to 4x the threshold so "at threshold" sits a
+                  // quarter of the way along rather than looking nearly full.
+                  const pct = Math.max(2, Math.min(100, (stock / (threshold * 4 || 1)) * 100));
+                  return (
+                    <div className="inv-item" key={colour.id}>
+                      <div className="inv-row">
+                        <span className="inv-name">
+                          <span className="colour-dot" style={{ background: colour.hex_code }} />
+                          {colour.name}
+                          {Number(colour.surcharge) > 0 && (
+                            <em style={{ fontSize: 10, color: 'var(--taupe)' }}>
+                              +{moneyExact(colour.surcharge)}/m
+                            </em>
+                          )}
+                        </span>
+                        {editing === colour.id ? (
+                          <span style={{ display: 'flex', gap: 6 }}>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              className="inline-input"
+                              value={draft}
+                              autoFocus
+                              onChange={(e) => setDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') save(colour);
+                                if (e.key === 'Escape') setEditing(null);
+                              }}
+                            />
+                            <button type="button" className="oa-btn" onClick={() => save(colour)}>
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              className="oa-btn"
+                              onClick={() => setEditing(null)}
+                            >
+                              Cancel
+                            </button>
+                          </span>
+                        ) : (
                           <span
-                            style={{ width: `${pct}%` }}
-                            className={
-                              stock <= 0 ? 'out' : material.is_low_stock ? 'low' : 'ok'
-                            }
-                          />
-                        </div>
-                        {stock.toFixed(1)} m
-                      </>
-                    )}
-                  </td>
-                  <td>{threshold.toFixed(1)} m</td>
-                  <td>
-                    {stock <= 0 ? (
-                      <span className="status-pill sp-out">Out of stock</span>
-                    ) : material.is_low_stock ? (
-                      <span className="status-pill sp-low">Low</span>
-                    ) : (
-                      <span className="status-pill sp-dispatched">OK</span>
-                    )}
-                  </td>
-                  <td>
-                    {editing === material.id ? (
-                      <>
-                        <button type="button" className="oa-btn" onClick={() => save(material)}>
-                          Save
-                        </button>
-                        <button type="button" className="oa-btn" onClick={() => setEditing(null)}>
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        className="oa-btn"
-                        onClick={() => {
-                          setEditing(material.id);
-                          setDraft(String(stock));
-                        }}
-                      >
-                        Edit stock
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                            }}
+                          >
+                            <span className={`inv-stock ${level}`}>
+                              {stock.toFixed(1)} m left{level ? ' ⚠' : ''}
+                            </span>
+                            <button
+                              type="button"
+                              className="oa-btn"
+                              onClick={() => {
+                                setEditing(colour.id);
+                                setDraft(String(stock));
+                              }}
+                            >
+                              Edit
+                            </button>
+                          </span>
+                        )}
+                      </div>
+                      <div className="inv-bar">
+                        <div className={`inv-fill ${level}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          );
+        })}
       </div>
-
-      <p className="admin-footnote">
-        Stock decrements automatically when an order is placed. A material at zero is disabled in
-        the customer wizard.
-      </p>
     </>
   );
 }

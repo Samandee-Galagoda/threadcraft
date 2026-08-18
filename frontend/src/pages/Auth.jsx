@@ -7,10 +7,15 @@ export default function Auth() {
   const [pwLength, setPwLength] = useState(0);
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { login, register, isAuthenticated } = useAuth();
+  const { login, register, isAuthenticated, isAdmin } = useAuth();
 
-  // Where to land after signing in — set by ProtectedRoute when it bounced you here.
-  const next = params.get('next') || '/dashboard';
+  // Where to land after signing in. An explicit ?next wins — that's the page a
+  // guard bounced you off, and you should end up where you were going. Otherwise
+  // role decides: administrators sign in through this same page and belong in
+  // the admin panel, not a customer dashboard with no orders of their own.
+  const explicitNext = params.get('next');
+  const landingFor = (admin) => explicitNext || (admin ? '/admin' : '/dashboard');
+  const next = landingFor(isAdmin);
   const sessionExpired = params.get('expired') === '1';
 
   // Form states
@@ -65,8 +70,9 @@ export default function Auth() {
 
     setSubmitting(true);
     try {
+      // Registration always creates a customer, so no role branch here.
       await register({ firstName, lastName, email, password });
-      navigate(next, { replace: true });
+      navigate(explicitNext || '/dashboard', { replace: true });
     } catch (err) {
       setError(err.message || 'Could not reach the server. Please try again.');
     } finally {
@@ -85,8 +91,10 @@ export default function Auth() {
 
     setSubmitting(true);
     try {
-      await login({ email, password });
-      navigate(next, { replace: true });
+      // Use the freshly returned user rather than isAdmin from context, which
+      // is still the pre-login value on this render.
+      const signedIn = await login({ email, password });
+      navigate(landingFor(signedIn?.role === 'admin'), { replace: true });
     } catch (err) {
       setError(err.message || 'Could not reach the server. Please try again.');
     } finally {

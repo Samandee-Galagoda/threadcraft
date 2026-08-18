@@ -648,10 +648,21 @@ def seed() -> None:
             mat = Material(**mat_data)
             db.add(mat)
             db.flush()
-            for name, hex_code, prompt_term in COLORS:
+            # Stock is held per colourway. Split the material's total across its
+            # colours so the seeded figures stay consistent with each other, and
+            # vary it a little so the inventory screen shows a realistic spread
+            # rather than six identical bars.
+            per_colour = Decimal(str(mat.stock_metres)) / len(COLORS)
+            for index, (name, hex_code, prompt_term) in enumerate(COLORS):
+                skew = Decimal("1.4") if index == 0 else (Decimal("0.4") if index == 1 else Decimal("1"))
                 db.add(
                     MaterialColor(
-                        material_id=mat.id, name=name, hex_code=hex_code, ai_prompt_term=prompt_term
+                        material_id=mat.id,
+                        name=name,
+                        hex_code=hex_code,
+                        ai_prompt_term=prompt_term,
+                        stock_metres=(per_colour * skew).quantize(Decimal("0.01")),
+                        low_stock_threshold=Decimal(str(mat.low_stock_threshold)) / len(COLORS),
                     )
                 )
         db.flush()

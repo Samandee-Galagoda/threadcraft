@@ -22,6 +22,13 @@ export function AuthProvider({ children }) {
     return created;
   }, []);
 
+  /** Replace the cached user after a profile edit, so the admin sidebar and
+   *  navbar reflect a renamed or re-addressed account without a re-login. */
+  const refreshUser = useCallback((updated) => {
+    setUser(updated);
+    localStorage.setItem('tc_user', JSON.stringify(updated));
+  }, []);
+
   const logout = useCallback(() => {
     authApi.logout();
     setUser(null);
@@ -35,8 +42,9 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      refreshUser,
     }),
-    [user, login, register, logout],
+    [user, login, register, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

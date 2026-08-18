@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.models.catalog import Material
+from app.models.catalog import Material, MaterialColor
 from app.models.order import Order, OrderStatusHistory
 
 # Cancelling after this stage no longer returns fabric to stock — by then it
@@ -66,6 +66,17 @@ def record_status_change(
     order.status = to_status
 
 
+def stock_holder(material, color):
+    """Whichever row actually holds the cloth for this selection.
+
+    Stock lives on the colourway — a tailor runs out of burgundy silk, not of
+    "silk" — so the colour is authoritative whenever one was chosen. A material
+    with no colours at all still carries its own stock, which is the only case
+    that falls back.
+    """
+    return color if color is not None else material
+
+
 def return_fabric_to_stock(db: Session, order: Order) -> Decimal:
     """Put an order's fabric back on the roll. Returns the metres restored.
 
@@ -80,12 +91,17 @@ def return_fabric_to_stock(db: Session, order: Order) -> Decimal:
     if order.status != "received":
         return Decimal("0")
 
-    material = db.query(Material).filter(Material.id == order.material_id).first()
-    if not material:  # material hard-deleted out from under a live order
+    # Return it to the same row it was taken from.
+    holder = None
+    if order.material_color_id:
+        holder = db.query(MaterialColor).filter(MaterialColor.id == order.material_color_id).first()
+    if holder is None:
+        holder = db.query(Material).filter(Material.id == order.material_id).first()
+    if holder is None:  # hard-deleted out from under a live order
         return Decimal("0")
 
     metres = Decimal(str(order.fabric_metres_used or 0))
-    material.stock_metres = Decimal(str(material.stock_metres)) + metres
+    holder.stock_metres = Decimal(str(holder.stock_metres)) + metres
     return metres
 
 

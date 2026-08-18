@@ -9,11 +9,14 @@ import MeasurementGuide from './pages/MeasurementGuide';
 import NotFound from './pages/NotFound';
 import OrderSuccess from './pages/OrderSuccess';
 import OrderTracking from './pages/OrderTracking';
+import AdminAnalytics from './pages/admin/AdminAnalytics';
 import AdminCatalogue from './pages/admin/AdminCatalogue';
+import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminInventory from './pages/admin/AdminInventory';
 import AdminLayout from './pages/admin/AdminLayout';
+import AdminMaterials from './pages/admin/AdminMaterials';
 import AdminOrders from './pages/admin/AdminOrders';
-import AdminOverview from './pages/admin/AdminOverview';
+import AdminPricing from './pages/admin/AdminPricing';
 import AdminSettings from './pages/admin/AdminSettings';
 
 function ProtectedRoute({ children }) {
@@ -96,10 +99,13 @@ function App() {
               </AdminRoute>
             }
           >
-            <Route index element={<AdminOverview />} />
+            <Route index element={<AdminDashboard />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="inventory" element={<AdminInventory />} />
-            <Route path="catalogue" element={<AdminCatalogue />} />
+            <Route path="cloth-types" element={<AdminCatalogue />} />
+            <Route path="materials" element={<AdminMaterials />} />
+            <Route path="pricing" element={<AdminPricing />} />
+            <Route path="analytics" element={<AdminAnalytics />} />
             <Route path="settings" element={<AdminSettings />} />
           </Route>
           <Route path="*" element={<NotFound />} />

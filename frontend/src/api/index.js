@@ -23,6 +23,7 @@ export const auth = {
   },
 
   me: () => api.get('/api/auth/me'),
+  updateProfile: (payload) => api.patch('/api/auth/me', payload),
 };
 
 // ── Catalogue ─────────────────────────────────────────────────────────────
@@ -117,6 +118,7 @@ export const payments = {
 export const admin = {
   analytics: (days = 30) => api.get(`/api/admin/analytics?days=${days}`),
   revenue: (days = 30) => api.get(`/api/admin/analytics/revenue?days=${days}`),
+  weekly: (weeks = 8) => api.get(`/api/admin/analytics/weekly?weeks=${weeks}`),
 
   orders: (status) =>
     api.get(`/api/admin/orders${status ? `?status=${encodeURIComponent(status)}` : ''}`),
@@ -130,6 +132,13 @@ export const admin = {
     api.patch(`/api/admin/inventory/materials/${materialId}/stock`, {
       stock_metres: stockMetres,
     }),
+  // Stock is held per colourway — this is the figure orders are checked and
+  // decremented against.
+  updateColourStock: (colorId, stockMetres, lowStockThreshold) =>
+    api.patch(`/api/admin/inventory/colors/${colorId}/stock`, {
+      stock_metres: stockMetres,
+      ...(lowStockThreshold != null ? { low_stock_threshold: lowStockThreshold } : {}),
+    }),
 
   clothTypes: () => api.get('/api/admin/catalog/cloth-types'),
   createClothType: (payload) => api.post('/api/admin/catalog/cloth-types', payload),
@@ -139,6 +148,24 @@ export const admin = {
     api.post(`/api/admin/catalog/cloth-types/${clothTypeId}/measurement-fields`, payload),
   deleteMeasurementField: (fieldId) =>
     api.del(`/api/admin/catalog/measurement-fields/${fieldId}`),
+
+  // Fabrics and colourways
+  adminMaterials: () => api.get('/api/admin/catalog/materials'),
+  createMaterial: (payload) => api.post('/api/admin/catalog/materials', payload),
+  updateMaterial: (id, payload) => api.patch(`/api/admin/catalog/materials/${id}`, payload),
+  deactivateMaterial: (id) => api.del(`/api/admin/catalog/materials/${id}`),
+  addColour: (materialId, payload) =>
+    api.post(`/api/admin/catalog/materials/${materialId}/colors`, payload),
+  removeColour: (colorId) => api.del(`/api/admin/catalog/materials/colors/${colorId}`),
+
+  // Design options and their pricing
+  optionGroups: () => api.get('/api/admin/catalog/design-options/groups'),
+  createOptionGroup: (payload) => api.post('/api/admin/catalog/design-options/groups', payload),
+  deactivateOptionGroup: (id) => api.del(`/api/admin/catalog/design-options/groups/${id}`),
+  createOption: (groupId, payload) =>
+    api.post(`/api/admin/catalog/design-options/groups/${groupId}/options`, payload),
+  updateOption: (id, payload) => api.patch(`/api/admin/catalog/design-options/options/${id}`, payload),
+  deactivateOption: (id) => api.del(`/api/admin/catalog/design-options/options/${id}`),
 
   settings: () => api.get('/api/admin/settings'),
   updateSetting: (key, value) => api.put(`/api/admin/settings/${key}`, { value }),

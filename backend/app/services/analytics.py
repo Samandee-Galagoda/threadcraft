@@ -161,6 +161,65 @@ def get_revenue_trend(db: Session, days: int = 30) -> list[dict]:
     return trend
 
 
+def get_weekly_orders(db: Session, weeks: int = 8) -> list[dict]:
+    """Orders and revenue bucketed into the last `weeks` calendar weeks.
+
+    Weeks are derived from the daily series rather than grouped in SQL, because
+    the week-number functions differ between SQLite (`strftime('%W')`) and
+    PostgreSQL (`date_trunc`) — and CI runs on SQLite while production runs on
+    Postgres, so a SQL-side grouping would be untested in exactly the
+    environment it ships to.
+
+    Counts every order, not just paid ones: this answers "how much work came
+    in", which is a production-planning question, unlike the revenue series
+    where an unpaid order is not income.
+    """
+    days = weeks * 7
+    since = datetime.now(UTC) - timedelta(days=days - 1)
+
+    rows = (
+        db.query(
+            func.date(Order.created_at).label("day"),
+            func.count(Order.id).label("orders"),
+            func.coalesce(
+                func.sum(case((Order.payment_status == "paid", Order.price_total), else_=0)), 0
+            ).label("revenue"),
+        )
+        .filter(Order.created_at >= since)
+        .group_by(func.date(Order.created_at))
+        .all()
+    )
+
+    by_day = {}
+    for day, orders, revenue in rows:
+        key = day if isinstance(day, str) else day.isoformat()
+        by_day[key] = (orders, Decimal(str(revenue or 0)))
+
+    today = _utc_today()
+    buckets = []
+    for index in range(weeks - 1, -1, -1):
+        end = today - timedelta(days=index * 7)
+        start = end - timedelta(days=6)
+        orders = 0
+        revenue = Decimal("0")
+        for offset in range(7):
+            day_orders, day_revenue = by_day.get(
+                (start + timedelta(days=offset)).isoformat(), (0, Decimal("0"))
+            )
+            orders += day_orders
+            revenue += day_revenue
+        buckets.append(
+            {
+                "week_start": start.isoformat(),
+                "week_end": end.isoformat(),
+                "label": start.strftime("%d %b"),
+                "orders": orders,
+                "revenue": str(revenue),
+            }
+        )
+    return buckets
+
+
 def get_popular_cloth_types(db: Session, limit: int = 8) -> list[dict]:
     rows = (
         db.query(

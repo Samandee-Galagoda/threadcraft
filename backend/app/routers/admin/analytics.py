@@ -35,6 +35,16 @@ def summary(db: Session = Depends(get_db)):
     return SummaryOut(**result.__dict__)
 
 
+@router.get("/weekly")
+def weekly_orders(weeks: int = 8, db: Session = Depends(get_db)):
+    """Order volume by week — the production-planning view."""
+    return {
+        "weeks": weeks,
+        "currency": "LKR",
+        "buckets": analytics_service.get_weekly_orders(db, weeks=weeks),
+    }
+
+
 @router.get("/revenue")
 def revenue_trend(
     days: int = Query(30, ge=1, le=365, description="How many days back to report"),

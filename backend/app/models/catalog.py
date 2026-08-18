@@ -155,6 +155,11 @@ class MaterialColor(Base):
     hex_code = Column(String(7), nullable=False)
     ai_prompt_term = Column(String(120), nullable=False)
     surcharge = Column(Numeric(10, 2), nullable=False, default=0)
+    # Stock is tracked per colourway, not per material: a tailor runs out of
+    # burgundy silk, not of "silk". Material.stock_metres is only used for a
+    # material that has no colours at all.
+    stock_metres = Column(Numeric(10, 2), nullable=False, default=0)
+    low_stock_threshold = Column(Numeric(10, 2), nullable=False, default=5)
     is_active = Column(Boolean, nullable=False, default=True)
 
     material = relationship("Material", back_populates="colors")

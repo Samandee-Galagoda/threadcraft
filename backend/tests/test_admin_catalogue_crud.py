@@ -10,6 +10,7 @@ seeing it priced through the *customer* endpoints. An admin endpoint that
 writes a row nobody reads proves nothing.
 """
 
+import datetime
 from decimal import Decimal
 
 from tests.conftest import auth_headers
@@ -289,3 +290,110 @@ def test_withdrawn_colour_leaves_the_wizard(client, admin_user, seeded_catalog):
     # explicable.
     admin_view = client.get("/api/admin/catalog/materials", headers=headers).json()
     assert any(c["id"] == colour_id for m in admin_view for c in m["colors"])
+
+
+# ── per-colour stock ─────────────────────────────────────────────────────────
+
+
+def test_stock_is_tracked_and_edited_per_colourway(client, admin_user, seeded_catalog):
+    """A tailor runs out of burgundy silk, not of silk. Stock used to sit on the
+    material, so the admin could see 42 m remaining with no way to know it was
+    all one colour — and an order for another colour was accepted against it."""
+    headers = _admin(client)
+    colour_id = seeded_catalog["color"].id
+
+    resp = client.patch(
+        f"/api/admin/inventory/colors/{colour_id}/stock",
+        json={"stock_metres": "4.5", "low_stock_threshold": "6"},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    assert Decimal(resp.json()["stock_metres"]) == Decimal("4.5")
+    assert resp.json()["is_low_stock"] is True  # 4.5 <= 6
+
+
+def test_a_material_reads_as_low_when_any_single_colourway_is(client, admin_user, seeded_catalog):
+    """100 m spread over six colours still cannot fulfil an order for the one
+    colour that has run out, so the material-level flag has to reflect the worst
+    colourway rather than the total."""
+    headers = _admin(client)
+    client.patch(
+        f"/api/admin/inventory/colors/{seeded_catalog['color'].id}/stock",
+        json={"stock_metres": "0.5", "low_stock_threshold": "5"},
+        headers=headers,
+    )
+    materials = client.get("/api/admin/inventory/materials", headers=headers).json()
+    row = next(m for m in materials if m["id"] == seeded_catalog["material"].id)
+    assert row["is_low_stock"] is True
+    assert Decimal(row["total_stock_metres"]) == Decimal("0.5")
+
+
+def test_negative_colour_stock_is_rejected(client, admin_user, seeded_catalog):
+    resp = client.patch(
+        f"/api/admin/inventory/colors/{seeded_catalog['color'].id}/stock",
+        json={"stock_metres": "-1"},
+        headers=_admin(client),
+    )
+    assert resp.status_code == 422
+
+
+def test_an_order_is_refused_when_that_colourway_is_short(client, admin_user, seeded_catalog):
+    """The whole point of per-colour stock: plenty of the material overall must
+    not authorise an order for a colour that has run out."""
+    headers = _admin(client)
+    client.patch(
+        f"/api/admin/inventory/colors/{seeded_catalog['color'].id}/stock",
+        json={"stock_metres": "0.2"},
+        headers=headers,
+    )
+    resp = client.post(
+        "/api/orders",
+        json={
+            "cloth_type_id": seeded_catalog["cloth_type"].id,
+            "material_id": seeded_catalog["material"].id,
+            "material_color_id": seeded_catalog["color"].id,
+            "design_option_ids": [],
+            "measurements": {"chest": 96},
+            "guest_email": "g@example.com",
+        },
+    )
+    assert resp.status_code == 409
+    assert "Ivory" in resp.json()["detail"]
+
+
+# ── weekly analytics ─────────────────────────────────────────────────────────
+
+
+def test_weekly_analytics_returns_contiguous_buckets(client, admin_user, seeded_catalog):
+    """Zero-filled and contiguous: a week with no orders must appear as zero
+    rather than be absent, or the bar chart silently compresses its x-axis."""
+    body = client.get("/api/admin/analytics/weekly?weeks=6", headers=_admin(client)).json()
+    buckets = body["buckets"]
+    assert len(buckets) == 6
+    assert all("orders" in b and "revenue" in b for b in buckets)
+    # Each bucket starts exactly seven days after the previous one.
+    starts = [datetime.date.fromisoformat(b["week_start"]) for b in buckets]
+    assert all((b - a).days == 7 for a, b in zip(starts, starts[1:], strict=False))
+
+
+def test_weekly_counts_every_order_but_only_paid_revenue(client, admin_user, seeded_catalog):
+    """Volume answers 'how much work came in', so an unpaid order still counts.
+    Revenue is income, so it does not."""
+    headers = _admin(client)
+    before = client.get("/api/admin/analytics/weekly?weeks=1", headers=headers).json()["buckets"][0]
+
+    client.post(
+        "/api/orders",
+        json={
+            "cloth_type_id": seeded_catalog["cloth_type"].id,
+            "material_id": seeded_catalog["material"].id,
+            "material_color_id": seeded_catalog["color"].id,
+            "design_option_ids": [],
+            "measurements": {"chest": 96},
+            "guest_email": "g@example.com",
+        },
+    )
+
+    after = client.get("/api/admin/analytics/weekly?weeks=1", headers=headers).json()["buckets"][0]
+    assert after["orders"] == before["orders"] + 1
+    assert Decimal(after["revenue"]) == Decimal(before["revenue"])
