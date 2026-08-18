@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import Modal from '../../components/admin/Modal';
 import { AdminHeader } from './AdminLayout';
 import { admin } from '../../api';
 import { moneyExact } from '../../lib/adminFormat';
@@ -26,9 +27,9 @@ export default function AdminMaterials() {
   const [notice, setNotice] = useState(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(EMPTY_MATERIAL);
-  const [expanded, setExpanded] = useState(null);
   const [colourForm, setColourForm] = useState(EMPTY_COLOUR);
-  const [editing, setEditing] = useState(null);
+  const [repricing, setRepricing] = useState(null);
+  const [colouring, setColouring] = useState(null);
   const [priceDraft, setPriceDraft] = useState('');
 
   const load = useCallback(async () => {
@@ -150,97 +151,119 @@ export default function AdminMaterials() {
               <span>
                 {material.name}
                 {!material.is_active && (
-                  <span className="status-badge status-cancelled">Inactive</span>
+                  <span className="status-badge status-cancelled" style={{ marginLeft: 8 }}>
+                    Inactive
+                  </span>
                 )}
+                <span style={{ color: 'var(--taupe)', marginLeft: 10, letterSpacing: '.06em' }}>
+                  {moneyExact(material.cost_per_metre)}/m
+                </span>
               </span>
-              <span>
-                {editing === material.id ? (
-                  <>
-                    <input
-                      type="number"
-                      min="0"
-                      className="inline-input"
-                      value={priceDraft}
-                      autoFocus
-                      onChange={(e) => setPriceDraft(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      className="oa-btn"
-                      onClick={async () => {
-                        const ok = await run(
-                          () =>
-                            admin.updateMaterial(material.id, {
-                              cost_per_metre: priceDraft,
-                            }),
-                          `${material.name} repriced. Existing orders keep the price they were placed at.`,
-                        );
-                        if (ok) setEditing(null);
-                      }}
-                    >
-                      Save
-                    </button>
-                    <button type="button" className="oa-btn" onClick={() => setEditing(null)}>
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span style={{ color: 'var(--taupe)', marginRight: 10 }}>
-                      {moneyExact(material.cost_per_metre)}/m
-                    </span>
-                    <button
-                      type="button"
-                      className="oa-btn"
-                      onClick={() => {
-                        setEditing(material.id);
-                        setPriceDraft(String(material.cost_per_metre));
-                      }}
-                    >
-                      Reprice
-                    </button>
-                    <button
-                      type="button"
-                      className="oa-btn"
-                      onClick={() => setExpanded(expanded === material.id ? null : material.id)}
-                    >
-                      {expanded === material.id ? 'Close' : 'Colours'}
-                    </button>
-                    <button
-                      type="button"
-                      className="oa-btn"
-                      onClick={() => {
-                        if (window.confirm(`Deactivate ${material.name}?`)) {
-                          run(
-                            () => admin.deactivateMaterial(material.id),
-                            `${material.name} deactivated — hidden from customers, kept for past orders.`,
-                          );
-                        }
-                      }}
-                    >
-                      Deactivate
-                    </button>
-                  </>
-                )}
+              {/* Three distinct actions, spaced. They were run together as one
+                  unreadable string of text before. */}
+              <span className="row-actions">
+                <button
+                  type="button"
+                  className="oa-btn"
+                  onClick={() => {
+                    setRepricing(material);
+                    setPriceDraft(String(material.cost_per_metre));
+                  }}
+                >
+                  Reprice
+                </button>
+                <button type="button" className="oa-btn" onClick={() => setColouring(material)}>
+                  Colours
+                </button>
+                <button
+                  type="button"
+                  className="oa-btn"
+                  onClick={() => {
+                    if (window.confirm(`Deactivate ${material.name}?`)) {
+                      run(
+                        () => admin.deactivateMaterial(material.id),
+                        `${material.name} deactivated — hidden from customers, kept for past orders.`,
+                      );
+                    }
+                  }}
+                >
+                  Deactivate
+                </button>
               </span>
             </div>
 
             <div className="tags-wrap">
-              {(material.colors || []).map((colour) => (
+              {(material.colors || []).length === 0 ? (
+                <p className="admin-empty-row">No colourways yet.</p>
+              ) : (
+                material.colors.map((colour) => (
+                  <span className="field-chip" key={colour.id}>
+                    <span className="colour-dot" style={{ background: colour.hex_code }} />
+                    <strong>{colour.name}</strong>
+                    <span>{Number(colour.stock_metres ?? 0).toFixed(1)}m</span>
+                    {Number(colour.surcharge) > 0 && <em>+{moneyExact(colour.surcharge)}/m</em>}
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+        ))}
+
+        {repricing && (
+          <Modal
+            title={`Reprice ${repricing.name}`}
+            subtitle="New quotes use this immediately; existing orders keep the price they were placed at"
+            onClose={() => setRepricing(null)}
+          >
+            <div className="field">
+              <label htmlFor="reprice-input">Cost per metre (LKR)</label>
+              <input
+                id="reprice-input"
+                type="number"
+                min="0"
+                autoFocus
+                value={priceDraft}
+                onChange={(e) => setPriceDraft(e.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn-sm btn-dark"
+              onClick={async () => {
+                const ok = await run(
+                  () => admin.updateMaterial(repricing.id, { cost_per_metre: priceDraft }),
+                  `${repricing.name} repriced to ${moneyExact(priceDraft)}/m.`,
+                );
+                if (ok) setRepricing(null);
+              }}
+            >
+              Save price
+            </button>
+          </Modal>
+        )}
+
+        {colouring && (
+          <Modal
+            title={`${colouring.name} colourways`}
+            subtitle="Stock for each colour is set in Inventory"
+            onClose={() => setColouring(null)}
+          >
+            <div className="tags-wrap" style={{ marginBottom: 18 }}>
+              {(colouring.colors || []).map((colour) => (
                 <span className="field-chip" key={colour.id}>
                   <span className="colour-dot" style={{ background: colour.hex_code }} />
                   <strong>{colour.name}</strong>
-                  <span>{Number(colour.stock_metres).toFixed(1)}m</span>
-                  {Number(colour.surcharge) > 0 && <em>+{moneyExact(colour.surcharge)}/m</em>}
+                  <span>{Number(colour.stock_metres ?? 0).toFixed(1)}m</span>
                   <button
                     type="button"
                     aria-label={`Withdraw ${colour.name}`}
-                    onClick={() =>
-                      run(
+                    onClick={async () => {
+                      const ok = await run(
                         () => admin.removeColour(colour.id),
-                        `${colour.name} withdrawn from ${material.name}.`,
-                      )
-                    }
+                        `${colour.name} withdrawn from ${colouring.name}.`,
+                      );
+                      if (ok) setColouring(null);
+                    }}
                   >
                     ×
                   </button>
@@ -248,88 +271,77 @@ export default function AdminMaterials() {
               ))}
             </div>
 
-            {expanded === material.id && (
-              <form
-                className="admin-form inline"
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  const ok = await run(
-                    () => admin.addColour(material.id, colourForm),
-                    `${colourForm.name} added to ${material.name}. Set its stock in Inventory.`,
-                  );
-                  if (ok) setColourForm(EMPTY_COLOUR);
-                }}
-              >
-                <div className="field-row">
-                  <div className="field">
-                    <label htmlFor={`c-name-${material.id}`}>Colour name</label>
-                    <input
-                      id={`c-name-${material.id}`}
-                      required
-                      value={colourForm.name}
-                      placeholder="Forest green"
-                      onChange={(e) =>
-                        setColourForm({
-                          ...colourForm,
-                          name: e.target.value,
-                          ai_prompt_term: colourForm.ai_prompt_term || e.target.value.toLowerCase(),
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor={`c-hex-${material.id}`}>Swatch</label>
-                    <input
-                      id={`c-hex-${material.id}`}
-                      type="color"
-                      value={colourForm.hex_code}
-                      onChange={(e) =>
-                        setColourForm({
-                          ...colourForm,
-                          hex_code: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
+            <form
+              className="admin-form"
+              style={{ borderTop: '.5px solid var(--sand)' }}
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const ok = await run(
+                  () => admin.addColour(colouring.id, colourForm),
+                  `${colourForm.name} added. Set its stock in Inventory.`,
+                );
+                if (ok) {
+                  setColourForm(EMPTY_COLOUR);
+                  setColouring(null);
+                }
+              }}
+            >
+              <div className="field-row">
+                <div className="field">
+                  <label htmlFor="c-name">Colour name</label>
+                  <input
+                    id="c-name"
+                    required
+                    value={colourForm.name}
+                    placeholder="Forest green"
+                    onChange={(e) =>
+                      setColourForm({
+                        ...colourForm,
+                        name: e.target.value,
+                        ai_prompt_term: colourForm.ai_prompt_term || e.target.value.toLowerCase(),
+                      })
+                    }
+                  />
                 </div>
-                <div className="field-row">
-                  <div className="field">
-                    <label htmlFor={`c-prompt-${material.id}`}>AI prompt term</label>
-                    <input
-                      id={`c-prompt-${material.id}`}
-                      required
-                      value={colourForm.ai_prompt_term}
-                      onChange={(e) =>
-                        setColourForm({
-                          ...colourForm,
-                          ai_prompt_term: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor={`c-sur-${material.id}`}>Surcharge per metre</label>
-                    <input
-                      id={`c-sur-${material.id}`}
-                      type="number"
-                      min="0"
-                      value={colourForm.surcharge}
-                      onChange={(e) =>
-                        setColourForm({
-                          ...colourForm,
-                          surcharge: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
+                <div className="field">
+                  <label htmlFor="c-hex">Swatch</label>
+                  <input
+                    id="c-hex"
+                    type="color"
+                    value={colourForm.hex_code}
+                    onChange={(e) => setColourForm({ ...colourForm, hex_code: e.target.value })}
+                  />
                 </div>
-                <button type="submit" className="btn-sm btn-light">
-                  + Add colourway
-                </button>
-              </form>
-            )}
-          </div>
-        ))}
+              </div>
+              <div className="field-row">
+                <div className="field">
+                  <label htmlFor="c-prompt">AI prompt term</label>
+                  <input
+                    id="c-prompt"
+                    required
+                    value={colourForm.ai_prompt_term}
+                    onChange={(e) =>
+                      setColourForm({ ...colourForm, ai_prompt_term: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="c-sur">Surcharge per metre</label>
+                  <input
+                    id="c-sur"
+                    type="number"
+                    min="0"
+                    value={colourForm.surcharge}
+                    onChange={(e) => setColourForm({ ...colourForm, surcharge: e.target.value })}
+                  />
+                </div>
+              </div>
+              <button type="submit" className="btn-sm btn-dark">
+                + Add colourway
+              </button>
+            </form>
+          </Modal>
+        )}
       </div>
     </>
   );
