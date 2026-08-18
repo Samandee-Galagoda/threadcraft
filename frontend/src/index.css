@@ -791,6 +791,14 @@ footer { background:var(--dark); color:#c4a882; padding:48px; display:grid; grid
 .week-bar:hover .week-bar-fill { background:var(--brown); }
 .week-bar-label { font-size:10px; color:var(--taupe); letter-spacing:.04em; white-space:nowrap; }
 
+.track-strip { display:flex; gap:6px; margin-top:14px; }
+.track-pip { flex:1; text-align:center; }
+.track-pip-dot { display:block; height:3px; background:var(--sand); margin-bottom:6px; }
+.track-pip.done .track-pip-dot { background:var(--taupe); }
+.track-pip.current .track-pip-dot { background:var(--brown); }
+.track-pip-label { font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--taupe); }
+.track-pip.current .track-pip-label { color:var(--brown); }
+
 /* ── RESPONSIVE ───────────────────────────────────────────── */
 @media (max-width:1100px) {
   .wizard, .mockup-page { grid-template-columns:1fr; }

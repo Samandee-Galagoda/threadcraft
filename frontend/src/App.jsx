@@ -2,13 +2,19 @@ import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WizardProvider } from './context/WizardContext';
 import Auth from './pages/Auth';
-import Dashboard from './pages/Dashboard';
+
 import DesignWizard from './pages/DesignWizard';
 import Home from './pages/Home';
 import MeasurementGuide from './pages/MeasurementGuide';
 import NotFound from './pages/NotFound';
 import OrderSuccess from './pages/OrderSuccess';
 import OrderTracking from './pages/OrderTracking';
+import AccountDashboard from './pages/account/AccountDashboard';
+import AccountDesigns from './pages/account/AccountDesigns';
+import AccountLayout from './pages/account/AccountLayout';
+import AccountMeasurements from './pages/account/AccountMeasurements';
+import AccountOrders from './pages/account/AccountOrders';
+import AccountProfile from './pages/account/AccountProfile';
 import AdminAnalytics from './pages/admin/AdminAnalytics';
 import AdminCatalogue from './pages/admin/AdminCatalogue';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -75,10 +81,16 @@ function App() {
             path="/dashboard"
             element={
               <ProtectedRoute>
-                <Dashboard />
+                <AccountLayout />
               </ProtectedRoute>
             }
-          />
+          >
+            <Route index element={<AccountDashboard />} />
+            <Route path="orders" element={<AccountOrders />} />
+            <Route path="measurements" element={<AccountMeasurements />} />
+            <Route path="designs" element={<AccountDesigns />} />
+            <Route path="profile" element={<AccountProfile />} />
+          </Route>
           <Route path="/measurement-guide" element={<MeasurementGuide />} />
           <Route
             path="/design/*"

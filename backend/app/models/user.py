@@ -1,4 +1,5 @@
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -30,14 +31,10 @@ class UserMeasurement(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
 
-    bust = Column(Float, default=0.0)
-    waist = Column(Float, default=0.0)
-    hip = Column(Float, default=0.0)
-    shoulder = Column(Float, default=0.0)
-    sleeve = Column(Float, default=0.0)
-    total_length = Column(Float, default=0.0)
-    chest = Column(Float, default=0.0)
-    inseam = Column(Float, default=0.0)
+    # Keyed by the catalogue's own `field_key`, so a measurement field an admin
+    # adds through the catalogue screen is storable the moment it exists. Fixed
+    # columns could never keep up: the seeded catalogue alone uses eighteen keys.
+    values = Column(JSON().with_variant(JSONB, "postgresql"), nullable=False, default=dict)
 
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

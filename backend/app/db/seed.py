@@ -697,9 +697,23 @@ def seed() -> None:
         cloth_types = list(cloth_type_by_slug.values())
         rng = random.Random(42)
         now = datetime.now(UTC)
+        # Real materials rather than the MATERIALS spec dicts, so the seeded
+        # orders carry usable foreign keys. Without them the reorder resolver
+        # cannot find the fabric and reports every historical order as
+        # discontinued — which is exactly what a demo would run into.
+        seeded_materials = db.query(Material).all()
+
         for i in range(15):
             ct = rng.choice(cloth_types)
-            chosen_material = rng.choice(MATERIALS)
+            chosen_material = rng.choice(seeded_materials)
+            chosen_colour = rng.choice(chosen_material.colors) if chosen_material.colors else None
+            chosen_options = [
+                option
+                for group in db.query(DesignOptionGroup)
+                .filter(DesignOptionGroup.cloth_type_id.is_(None))
+                .all()
+                for option in ([rng.choice(group.options)] if group.options else [])
+            ][:2]
             days_ago = rng.randint(1, 90)
             created = now - timedelta(days=days_ago)
             n_stages = rng.randint(1, len(STATUS_FLOW))
@@ -711,9 +725,12 @@ def seed() -> None:
                 user_id=demo.id if i % 3 == 0 else None,
                 guest_email=None if i % 3 == 0 else "guest@example.com",
                 cloth_type_id=ct.id,
-                material_id=None,  # synthetic seed data — snapshot fields below carry the name
+                material_id=chosen_material.id,
+                material_color_id=chosen_colour.id if chosen_colour else None,
                 cloth_type_name=ct.name,
-                material_name=chosen_material["name"],
+                material_name=chosen_material.name,
+                color_name=chosen_colour.name if chosen_colour else None,
+                color_hex=chosen_colour.hex_code if chosen_colour else None,
                 fabric_metres_used=ct.base_fabric_metres,
                 price_base=ct.base_price,
                 price_stitching=ct.base_stitching_cost,
@@ -721,8 +738,8 @@ def seed() -> None:
                 price_delivery=Decimal("0") if price > 15000 else Decimal("350"),
                 price_total=price,
                 price_breakdown=[],
-                design_options_snapshot=[],
-                measurements_snapshot={},
+                design_options_snapshot=[{"code": o.code, "label": o.label} for o in chosen_options],
+                measurements_snapshot={f.field_key: 90 for f in ct.measurement_fields[:3]},
                 status=final_status,
                 payment_status="paid",
                 created_at=created,
