@@ -207,3 +207,61 @@ def test_the_guide_payload_is_public(client, seeded_catalog):
     body = resp.json()
     assert body
     assert "measurement_fields" in body[0]
+
+
+# ── measurement ranges ───────────────────────────────────────────────────────
+
+
+def test_measurement_ranges_are_plausible_for_an_adult_body(client, seeded_catalog):
+    """The seeded bounds were originally carried across from inch-denominated
+    garment charts as if they were centimetres — denim waists start at 26-28",
+    bra bands at 28" — which produced minimums no adult reaches: a 50 cm waist
+    is 20 inches. Nothing was rejected by it, but the guide printed those
+    figures as the typical range and the wizard accepted them without comment.
+    """
+    from app.models.catalog import ClothType
+    from tests.conftest import TestSessionLocal
+
+    # Smallest published adult values: women's UK 4 is bust 76, waist 58, hip 82;
+    # men's XS chest is 81. A floor below these cannot be a real customer.
+    FLOORS = {"bust": 70, "chest": 70, "waist": 55, "hip": 78, "shoulder": 30}
+
+    db = TestSessionLocal()
+    try:
+        for garment in db.query(ClothType).all():
+            for field in garment.measurement_fields:
+                floor = FLOORS.get(field.field_key)
+                if floor is None:
+                    continue
+                assert float(field.min_value) >= floor, (
+                    f"{garment.slug}.{field.field_key} minimum "
+                    f"{field.min_value} cm is {float(field.min_value) / 2.54:.0f} inches"
+                )
+                assert float(field.max_value) > float(field.min_value)
+    finally:
+        db.close()
+
+
+def test_the_same_body_part_has_the_same_range_on_every_garment(client, seeded_catalog):
+    """A waist is a waist. Different bounds per garment meant the guide showed a
+    customer one typical range for a skirt and another for trousers, and the
+    validator disagreed with itself about the same measurement."""
+    from app.models.catalog import ClothType
+    from tests.conftest import TestSessionLocal
+
+    SHARED = {"bust", "chest", "waist", "hip", "shoulder", "thigh", "knee"}
+
+    db = TestSessionLocal()
+    try:
+        ranges = {}
+        for garment in db.query(ClothType).all():
+            for field in garment.measurement_fields:
+                if field.field_key not in SHARED:
+                    continue
+                ranges.setdefault(field.field_key, set()).add(
+                    (float(field.min_value), float(field.max_value))
+                )
+        for key, values in ranges.items():
+            assert len(values) == 1, f"{key} has {len(values)} different ranges: {sorted(values)}"
+    finally:
+        db.close()
