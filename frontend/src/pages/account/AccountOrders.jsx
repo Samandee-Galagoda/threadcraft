@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdminHeader } from '../admin/AdminLayout';
-import Modal from '../../components/admin/Modal';
+import Modal from '../../components/Modal';
 import { orders as ordersApi } from '../../api';
 import { STAGES, STATUS_LABELS, moneyExact, shortDate, statusClass } from '../../lib/adminFormat';
 

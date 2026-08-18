@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 
 /**
- * Dialog used for the Reprice and Colours editors.
+ * Generic dialog, used by both the admin panel and the storefront.
  *
- * They were inline before, which pushed the whole material list around every
- * time one was opened — the row you were editing moved under the cursor.
+ * It started as the admin's Reprice/Colours editor — those were inline, which
+ * pushed the whole material list around every time one opened, moving the row
+ * you were editing out from under the cursor. Nothing about it is
+ * admin-specific, so it lives here rather than under components/admin.
  */
 export default function Modal({ title, subtitle, onClose, children }) {
   // Escape closes, matching every other dialog the customer side uses.

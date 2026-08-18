@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import Modal from '../../components/admin/Modal';
+import Modal from '../../components/Modal';
 import { AdminHeader } from './AdminLayout';
 import { admin } from '../../api';
 import { moneyExact } from '../../lib/adminFormat';

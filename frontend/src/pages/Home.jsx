@@ -1,8 +1,12 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import CatalogueModal from '../components/CatalogueModal';
 
 export default function Home() {
+  const [catalogueOpen, setCatalogueOpen] = useState(false);
+
   return (
     <>
       <div className="announce">FREE DELIVERY ON ORDERS OVER LKR 8,000 · 10-DAY DELIVERY GUARANTEE</div>
@@ -19,7 +23,7 @@ export default function Home() {
           <p className="hero-sub">Design your custom garment online.<br/>Preview it with AI. Delivered in 10 days.</p>
           <div style={{display:'flex',gap:'16px',flexWrap:'wrap'}}>
             <Link to="/design" className="btn-filled">Start designing</Link>
-            <a href="#" className="btn-outline">How it works</a>
+            <Link to="/how-it-works" className="btn-outline">How it works</Link>
           </div>
         </div>
       </div>
@@ -127,10 +131,11 @@ export default function Home() {
           <div className="mat-item"><div className="mat-swatch" style={{background:'linear-gradient(135deg,#d8e0d8,#c4d0c4)'}}></div><div className="mat-name">Denim</div></div>
           <div className="mat-item"><div className="mat-swatch" style={{background:'linear-gradient(135deg,#f0e4e8,#e4d0d4)'}}></div><div className="mat-name">Velvet</div></div>
         </div>
-        <div style={{textAlign:'center'}}><a href="#" className="btn-outline">View full catalogue</a></div>
+        <div style={{textAlign:'center'}}><button type="button" className="btn-outline" onClick={() => setCatalogueOpen(true)}>View full catalogue</button></div>
       </div>
 
       <Footer />
+      {catalogueOpen && <CatalogueModal onClose={() => setCatalogueOpen(false)} />}
     </>
   );
 }
