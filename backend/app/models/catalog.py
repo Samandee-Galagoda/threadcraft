@@ -133,7 +133,11 @@ class Material(Base):
     stock_metres = Column(Numeric(10, 2), nullable=False, default=0)
     low_stock_threshold = Column(Numeric(10, 2), nullable=False, default=20)
 
-    swatch_css = Column(String(200))  # preserves the existing gradient swatches
+    swatch_css = Column(String(200))  # gradient fallback, and what a new fabric starts with
+    # A photograph of the cloth. Gradients tell a customer the colour; only a
+    # photograph tells them whether it is sheer, brushed or slubbed, which is
+    # the decision the material step actually asks them to make.
+    swatch_image_url = Column(String(500))
     ai_prompt_term = Column(String(200), nullable=False)
     care_notes = Column(Text)
     is_active = Column(Boolean, nullable=False, default=True)

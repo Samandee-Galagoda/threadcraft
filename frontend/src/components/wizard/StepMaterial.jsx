@@ -1,4 +1,5 @@
 import { useWizard } from '../../context/WizardContext';
+import Swatch from '../Swatch';
 
 export default function StepMaterial({ materials, loading, error }) {
   const { state, dispatch } = useWizard();
@@ -32,7 +33,7 @@ export default function StepMaterial({ materials, loading, error }) {
                 })
               }
             >
-              <div className="mat-swatch" style={{ background: material.swatch_css || '#E8D5C0' }} />
+              <Swatch material={material} />
               <div className="mat-name">{material.name}</div>
               <div className="mat-price">
                 LKR {Number(material.cost_per_metre).toLocaleString()}/m

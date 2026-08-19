@@ -37,6 +37,7 @@ class MaterialCreate(BaseModel):
     stock_metres: Decimal = Field(default=Decimal("0"), ge=0)
     low_stock_threshold: Decimal = Field(default=Decimal("20"), ge=0)
     swatch_css: str | None = None
+    swatch_image_url: str | None = None
     ai_prompt_term: str
     care_notes: str | None = None
 
@@ -47,6 +48,7 @@ class MaterialUpdate(BaseModel):
     stock_metres: Decimal | None = Field(default=None, ge=0)
     low_stock_threshold: Decimal | None = Field(default=None, ge=0)
     swatch_css: str | None = None
+    swatch_image_url: str | None = None
     ai_prompt_term: str | None = None
     care_notes: str | None = None
     is_active: bool | None = None

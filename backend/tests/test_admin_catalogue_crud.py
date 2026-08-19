@@ -397,3 +397,38 @@ def test_weekly_counts_every_order_but_only_paid_revenue(client, admin_user, see
     after = client.get("/api/admin/analytics/weekly?weeks=1", headers=headers).json()["buckets"][0]
     assert after["orders"] == before["orders"] + 1
     assert Decimal(after["revenue"]) == Decimal(before["revenue"])
+
+
+def test_a_material_without_a_photograph_still_has_a_swatch(client, admin_user):
+    """The gradient is the fallback, not dead weight: a fabric an admin adds
+    before they have a photograph must still render something rather than a
+    broken image."""
+    headers = _admin(client)
+    created = client.post(
+        "/api/admin/catalog/materials",
+        json={
+            "slug": "hessian",
+            "name": "Hessian",
+            "cost_per_metre": "300",
+            "ai_prompt_term": "hessian",
+            "swatch_css": "#d8c9a8",
+        },
+        headers=headers,
+    ).json()
+    assert created["swatch_image_url"] is None
+    assert created["swatch_css"] == "#d8c9a8"
+
+
+def test_a_swatch_photograph_can_be_set_through_the_admin_api(client, admin_user, seeded_catalog):
+    headers = _admin(client)
+    updated = client.patch(
+        f"/api/admin/catalog/materials/{seeded_catalog['material'].id}",
+        json={"swatch_image_url": "/img/materials/tweed.jpg"},
+        headers=headers,
+    ).json()
+    assert updated["swatch_image_url"] == "/img/materials/tweed.jpg"
+
+    # And it reaches the customer, which is the only place it matters.
+    public = client.get("/api/catalog/materials").json()
+    row = next(m for m in public if m["id"] == seeded_catalog["material"].id)
+    assert row["swatch_image_url"] == "/img/materials/tweed.jpg"
