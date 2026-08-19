@@ -50,6 +50,9 @@ pnpm-debug.log*
 
 # ── OS / editor ────────────────────────────
 .DS_Store
+# Office lock files — created while a document is open, meaningless once closed.
+~$*
+
 .idea/
 *.swp
 *.suo
