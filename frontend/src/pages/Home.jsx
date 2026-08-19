@@ -1,11 +1,37 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import CatalogueModal from '../components/CatalogueModal';
+import Swatch from '../components/Swatch';
+import { catalog } from '../api';
+
+// Names only — used when the API is unreachable, so the section still reads as
+// a fabric list rather than collapsing.
+const FALLBACK_FABRICS = [
+  { name: 'Cotton', swatch_image_url: '/img/materials/cotton.jpg' },
+  { name: 'Linen', swatch_image_url: '/img/materials/linen.jpg' },
+  { name: 'Silk', swatch_image_url: '/img/materials/silk.jpg' },
+  { name: 'Chiffon', swatch_image_url: '/img/materials/chiffon.jpg' },
+  { name: 'Satin', swatch_image_url: '/img/materials/satin.jpg' },
+  { name: 'Denim', swatch_image_url: '/img/materials/denim.jpg' },
+  { name: 'Velvet', swatch_image_url: '/img/materials/velvet.jpg' },
+];
 
 export default function Home() {
   const [catalogueOpen, setCatalogueOpen] = useState(false);
+  const [materials, setMaterials] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    catalog
+      .materials()
+      .then((rows) => !cancelled && setMaterials(rows))
+      .catch(() => {}); // the fallback list covers this
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <>
@@ -122,14 +148,23 @@ export default function Home() {
           <h2>Premium Fabrics</h2>
           <p>Select from our curated material collection</p>
         </div>
+        {/* Read from the catalogue rather than hardcoded, so this teaser cannot
+            advertise a fabric the shop has withdrawn — or omit one it has just
+            added. Falls back to the static names below only if the API is
+            unreachable, since a marketing page should not go blank because a
+            free-tier backend is cold-starting. */}
         <div className="mat-grid">
-          <div className="mat-item"><div className="mat-swatch" style={{background:'#f5ede0'}}></div><div className="mat-name">Cotton</div></div>
-          <div className="mat-item"><div className="mat-swatch" style={{background:'#e8ddd0'}}></div><div className="mat-name">Linen</div></div>
-          <div className="mat-item"><div className="mat-swatch" style={{background:'linear-gradient(135deg,#e8ddf0,#d4c8e8)'}}></div><div className="mat-name">Silk</div></div>
-          <div className="mat-item"><div className="mat-swatch" style={{background:'linear-gradient(135deg,#f0ece8,#e4dcd4)'}}></div><div className="mat-name">Chiffon</div></div>
-          <div className="mat-item"><div className="mat-swatch" style={{background:'linear-gradient(135deg,#dce8f0,#c8d8e8)'}}></div><div className="mat-name">Satin</div></div>
-          <div className="mat-item"><div className="mat-swatch" style={{background:'linear-gradient(135deg,#d8e0d8,#c4d0c4)'}}></div><div className="mat-name">Denim</div></div>
-          <div className="mat-item"><div className="mat-swatch" style={{background:'linear-gradient(135deg,#f0e4e8,#e4d0d4)'}}></div><div className="mat-name">Velvet</div></div>
+          {(materials.length ? materials : FALLBACK_FABRICS).map((material) => (
+            <button
+              type="button"
+              className="mat-item"
+              key={material.slug ?? material.name}
+              onClick={() => setCatalogueOpen(true)}
+            >
+              <Swatch material={material} />
+              <div className="mat-name">{material.name}</div>
+            </button>
+          ))}
         </div>
         <div style={{textAlign:'center'}}><button type="button" className="btn-outline" onClick={() => setCatalogueOpen(true)}>View full catalogue</button></div>
       </div>

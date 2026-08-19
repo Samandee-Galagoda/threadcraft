@@ -481,6 +481,7 @@ MATERIALS = [
         stock_metres=Decimal("120"),
         low_stock_threshold=Decimal("20"),
         swatch_css="#f5ede0",
+        swatch_image_url="/img/materials/cotton.jpg",
         ai_prompt_term="cotton",
     ),
     dict(
@@ -490,6 +491,7 @@ MATERIALS = [
         stock_metres=Decimal("80"),
         low_stock_threshold=Decimal("20"),
         swatch_css="#e8ddd0",
+        swatch_image_url="/img/materials/linen.jpg",
         ai_prompt_term="matte slubby linen",
     ),
     dict(
@@ -499,6 +501,7 @@ MATERIALS = [
         stock_metres=Decimal("2"),
         low_stock_threshold=Decimal("10"),
         swatch_css="linear-gradient(135deg,#e8ddf0,#d4c8e8)",
+        swatch_image_url="/img/materials/silk.jpg",
         ai_prompt_term="lustrous draping silk",
     ),
     dict(
@@ -508,6 +511,7 @@ MATERIALS = [
         stock_metres=Decimal("45"),
         low_stock_threshold=Decimal("15"),
         swatch_css="linear-gradient(135deg,#f0ece8,#e4dcd4)",
+        swatch_image_url="/img/materials/chiffon.jpg",
         ai_prompt_term="sheer flowing chiffon",
     ),
     dict(
@@ -517,6 +521,7 @@ MATERIALS = [
         stock_metres=Decimal("60"),
         low_stock_threshold=Decimal("15"),
         swatch_css="linear-gradient(135deg,#dce8f0,#c8d8e8)",
+        swatch_image_url="/img/materials/satin.jpg",
         ai_prompt_term="glossy satin",
     ),
     dict(
@@ -526,6 +531,7 @@ MATERIALS = [
         stock_metres=Decimal("70"),
         low_stock_threshold=Decimal("20"),
         swatch_css="linear-gradient(135deg,#d8e0d8,#c4d0c4)",
+        swatch_image_url="/img/materials/denim.jpg",
         ai_prompt_term="sturdy denim twill",
     ),
     dict(
@@ -535,6 +541,7 @@ MATERIALS = [
         stock_metres=Decimal("30"),
         low_stock_threshold=Decimal("15"),
         swatch_css="linear-gradient(135deg,#f0e4e8,#e4d0d4)",
+        swatch_image_url="/img/materials/velvet.jpg",
         ai_prompt_term="plush velvet",
     ),
 ]

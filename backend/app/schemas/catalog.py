@@ -67,6 +67,7 @@ class MaterialOut(BaseModel):
     stock_metres: Decimal
     low_stock_threshold: Decimal
     swatch_css: str | None
+    swatch_image_url: str | None = None
     colors: list[MaterialColorOut]
 
     @computed_field

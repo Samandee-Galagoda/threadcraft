@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Modal from './Modal';
+import Swatch from './Swatch';
 import { catalog } from '../api';
 
 /**
@@ -41,11 +42,7 @@ export default function CatalogueModal({ onClose }) {
         const inStock = (material.colors || []).filter((c) => Number(c.stock_metres) > 0);
         return (
           <div className="cat-row" key={material.id}>
-            <div
-              className="cat-swatch"
-              style={{ background: material.swatch_css || 'var(--sand)' }}
-              aria-hidden="true"
-            />
+            <Swatch material={material} className="cat-swatch" />
             <div className="cat-detail">
               <div className="cat-name">
                 {material.name}

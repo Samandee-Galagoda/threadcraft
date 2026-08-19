@@ -27,3 +27,23 @@ the set, against ~630 KB for the same images at their native 1400×2100.
 
 Steps 1 and 4 reuse `tshirt.jpg` and `measurement-guide.jpg`, which the repo
 already carried, rather than downloading near-duplicates.
+
+## Material swatches
+
+Photographed fabric swatches, shown in the design wizard, on the home page and
+in the fabric catalogue dialog.
+
+| File | Pexels photo | Fabric |
+|---|---|---|
+| `frontend/public/img/materials/cotton.jpg` | [7641222](https://www.pexels.com/photo/7641222/) | White woven cotton, plain weave |
+| `frontend/public/img/materials/linen.jpg` | [7641150](https://www.pexels.com/photo/7641150/) | Natural linen with visible slub |
+| `frontend/public/img/materials/silk.jpg` | [4863033](https://www.pexels.com/photo/4863033/) | Silk with sheen and drape |
+| `frontend/public/img/materials/chiffon.jpg` | [7946560](https://www.pexels.com/photo/7946560/) | Sheer lightweight chiffon |
+| `frontend/public/img/materials/satin.jpg` | [1487809](https://www.pexels.com/photo/1487809/) | Navy satin, fine weave and sheen |
+| `frontend/public/img/materials/denim.jpg` | [34851013](https://www.pexels.com/photo/34851013/) | Indigo denim twill |
+| `frontend/public/img/materials/velvet.jpg` | [7232401](https://www.pexels.com/photo/7232401/) | Green velvet pile |
+
+Each was checked by eye against the fabric it claims to be before use — the
+first pass returned eyelet lace for chiffon, a loose knit for cotton, and a
+flower arrangement for silk, none of which a customer could have identified.
+Requested as 420x420 crops, the size the swatch renders at: 308 KB for all seven.
