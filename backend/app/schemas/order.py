@@ -41,9 +41,19 @@ class OrderCreate(BaseModel):
     mockup_prompt: str | None = None
     mockup_model: str | None = None
 
-    # Only used for guest checkout — ignored if the caller is authenticated
+    # Contact and delivery. Required for every order — a made-to-measure garment
+    # is a physical thing that has to arrive somewhere, and the previous schema
+    # took payment without ever asking where.
+    #
+    # Note the absence of card fields. Those go from the browser to Stripe and
+    # never reach this API, so there is nothing here to accidentally log or store.
     guest_email: EmailStr | None = None
     guest_name: str | None = None
+    customer_name: str | None = Field(default=None, max_length=200)
+    customer_phone: str | None = Field(default=None, max_length=40)
+    delivery_address: str | None = None
+    delivery_city: str | None = Field(default=None, max_length=120)
+    delivery_postcode: str | None = Field(default=None, max_length=20)
 
 
 class OrderStatusUpdate(BaseModel):
@@ -82,7 +92,18 @@ class OrderOut(BaseModel):
     created_at: datetime.datetime
 
 
-class AdminOrderOut(OrderOut):
+class DeliveryOut(BaseModel):
+    """Where an order is going. Admin-only — it is personal data, and the public
+    tracking endpoint is reachable with nothing but an order number."""
+
+    customer_name: str | None = None
+    customer_phone: str | None = None
+    delivery_address: str | None = None
+    delivery_city: str | None = None
+    delivery_postcode: str | None = None
+
+
+class AdminOrderOut(OrderOut, DeliveryOut):
     """Admin view of an order.
 
     Exposes the numeric primary key, which OrderOut deliberately omits: the

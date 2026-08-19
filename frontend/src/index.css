@@ -855,6 +855,25 @@ footer { background:var(--dark); color:#c4a882; padding:48px; display:grid; grid
 
 .guide-actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:24px; }
 
+.checkout-overlay { position:fixed; inset:0; background:rgba(44,31,20,.5); display:flex; align-items:flex-start; justify-content:center; z-index:90; padding:32px 20px; overflow-y:auto; }
+.checkout-form { background:var(--cream); border:1px solid var(--sand); width:100%; max-width:640px; padding:32px 36px; }
+.checkout-head { border-bottom:.5px solid var(--sand); padding-bottom:18px; margin-bottom:22px; }
+.checkout-head h2 { font-family:var(--serif); font-size:30px; font-weight:300; color:var(--dark); }
+.checkout-head p { font-size:12px; color:var(--text); margin-top:6px; letter-spacing:.02em; }
+.checkout-head strong { font-family:var(--serif); font-size:16px; color:var(--brown); }
+.checkout-section { margin-bottom:26px; }
+.checkout-section .form-label { display:block; margin-bottom:12px; }
+/* Reassurance about card handling sits with the card fields, where the question
+   actually occurs to someone. */
+.checkout-secure { font-size:11px; color:var(--taupe); line-height:1.7; border-left:2px solid var(--sand); padding-left:12px; margin-top:12px; }
+.checkout-actions { display:flex; gap:12px; justify-content:space-between; flex-wrap:wrap; border-top:.5px solid var(--sand); padding-top:20px; }
+
+@media (max-width:560px) {
+  .checkout-form { padding:24px 20px; }
+  .checkout-actions { flex-direction:column-reverse; }
+  .checkout-actions button { width:100%; }
+}
+
 /* ── RESPONSIVE ───────────────────────────────────────────── */
 @media (max-width:1100px) {
   .wizard, .mockup-page, .chart-wrap { grid-template-columns:1fr; }

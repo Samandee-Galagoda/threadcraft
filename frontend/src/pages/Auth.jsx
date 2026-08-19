@@ -9,12 +9,20 @@ export default function Auth() {
   const [params] = useSearchParams();
   const { login, register, isAuthenticated, isAdmin } = useAuth();
 
-  // Where to land after signing in. An explicit ?next wins — that's the page a
-  // guard bounced you off, and you should end up where you were going. Otherwise
-  // role decides: administrators sign in through this same page and belong in
-  // the admin panel, not a customer dashboard with no orders of their own.
+  // Where to land after signing in.
+  //
+  // ?next is the page a guard bounced you off, so it normally wins — you should
+  // end up where you were going. The exception is the customer dashboard: an
+  // administrator who typed /dashboard, or followed a stale link, gets bounced
+  // to /auth?next=/dashboard and would then be sent to a customer dashboard
+  // holding none of their own orders. Signing in with admin credentials has to
+  // reach the admin panel however you arrived at this page.
   const explicitNext = params.get('next');
-  const landingFor = (admin) => explicitNext || (admin ? '/admin' : '/dashboard');
+  const isCustomerHome = (path) => !path || path === '/dashboard' || path.startsWith('/dashboard/');
+  const landingFor = (admin) => {
+    if (admin) return isCustomerHome(explicitNext) ? '/admin' : explicitNext;
+    return explicitNext || '/dashboard';
+  };
   const next = landingFor(isAdmin);
   const sessionExpired = params.get('expired') === '1';
 

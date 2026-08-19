@@ -136,6 +136,19 @@ def render_order_confirmation(order, mockup_url: str | None = None) -> tuple[str
     details = order.design_options_snapshot or []
     detail_text = ", ".join(d.get("label", "") for d in details) or "None"
 
+    # Delivery block, so the customer can check the address while the order is
+    # still cancellable rather than discovering a typo when nothing arrives.
+    delivery_rows = ""
+    if order.delivery_address:
+        address = ", ".join(
+            part for part in (order.delivery_address, order.delivery_city, order.delivery_postcode) if part
+        )
+        delivery_rows = (
+            _row("Name", order.customer_name or "—")
+            + _row("Address", address)
+            + (_row("Phone", order.customer_phone) if order.customer_phone else "")
+        )
+
     garment_rows = (
         _row("Garment", order.cloth_type_name) + _row("Material", material) + _row("Details", detail_text)
     )
@@ -167,6 +180,7 @@ def render_order_confirmation(order, mockup_url: str | None = None) -> tuple[str
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
         f"{mockup_block}"
         f"{_section('Your garment', garment_rows)}"
+        f"{_section('Delivering to', delivery_rows) if delivery_rows else ''}"
         f"{_section('Your measurements', measurement_rows) if measurement_rows else ''}"
         f"{_section('Price breakdown', price_rows)}"
         f"</table>"
