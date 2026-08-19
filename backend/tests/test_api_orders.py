@@ -141,3 +141,89 @@ def test_options_apply_stitching_premium_and_fabric_multiplier(client, seeded_ca
     # base 2200 + stitching (300 + 300 premium) 600 + material (1.4*1.20=1.68m * 650) 1092 + delivery 350
     assert Decimal(body["price_total"]) == Decimal("4242.00")
     assert Decimal(body["fabric_metres_used"]) == Decimal("1.68")
+
+
+# ── checkout details ─────────────────────────────────────────────────────────
+
+
+def test_delivery_details_are_captured_with_the_order(client, seeded_catalog):
+    """Checkout previously took payment for a physical garment without ever
+    asking where to send it."""
+    resp = client.post(
+        "/api/orders",
+        json={
+            **_order_payload(seeded_catalog, guest_email="guest@example.com"),
+            "customer_name": "Nimesha Perera",
+            "customer_phone": "0771234567",
+            "delivery_address": "14 Galle Road, Bambalapitiya",
+            "delivery_city": "Colombo",
+            "delivery_postcode": "00400",
+        },
+    )
+    assert resp.status_code == 201
+
+    from app.models.order import Order
+    from tests.conftest import TestSessionLocal
+
+    db = TestSessionLocal()
+    try:
+        order = db.query(Order).filter(Order.order_number == resp.json()["order_number"]).first()
+        assert order.customer_name == "Nimesha Perera"
+        assert order.customer_phone == "0771234567"
+        assert order.delivery_city == "Colombo"
+    finally:
+        db.close()
+
+
+def test_the_public_tracking_payload_never_leaks_the_address(client, seeded_catalog):
+    """An order number alone opens the tracking page, so it must not expose
+    where the customer lives or how to phone them."""
+    order = client.post(
+        "/api/orders",
+        json={
+            **_order_payload(seeded_catalog, guest_email="guest@example.com"),
+            "customer_name": "Nimesha Perera",
+            "customer_phone": "0771234567",
+            "delivery_address": "14 Galle Road",
+            "delivery_city": "Colombo",
+        },
+    ).json()
+
+    body = client.get(f"/api/orders/track/{order['order_number']}").json()
+    for leaked in ("delivery_address", "delivery_city", "customer_phone", "customer_name"):
+        assert leaked not in body, f"{leaked} is exposed on the public tracking endpoint"
+
+
+def test_the_admin_order_view_does_show_the_delivery_details(client, seeded_catalog, admin_user):
+    """The people who have to post the parcel need the address."""
+    from tests.conftest import auth_headers
+
+    order = client.post(
+        "/api/orders",
+        json={
+            **_order_payload(seeded_catalog, guest_email="guest@example.com"),
+            "customer_name": "Nimesha Perera",
+            "delivery_address": "14 Galle Road",
+            "delivery_city": "Colombo",
+        },
+    ).json()
+
+    headers = auth_headers(client, "admin@example.com", "adminpass123")
+    row = next(
+        o
+        for o in client.get("/api/admin/orders", headers=headers).json()
+        if o["order_number"] == order["order_number"]
+    )
+    assert row["delivery_address"] == "14 Galle Road"
+    assert row["customer_name"] == "Nimesha Perera"
+
+
+def test_no_card_field_exists_anywhere_on_the_order_api(client, seeded_catalog):
+    """Card details go from the browser to Stripe and never reach this API.
+    An endpoint that cannot receive a card number cannot log, store or leak one,
+    so this asserts the absence rather than trusting the handling."""
+    schema = client.get("/openapi.json").json()
+    order_create = schema["components"]["schemas"]["OrderCreate"]["properties"]
+    forbidden = ("card", "cvc", "cvv", "pan", "expiry", "card_number")
+    for field in order_create:
+        assert not any(word in field.lower() for word in forbidden), f"OrderCreate exposes {field}"

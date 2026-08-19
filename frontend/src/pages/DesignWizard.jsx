@@ -7,6 +7,7 @@ import StepMaterial from '../components/wizard/StepMaterial';
 import StepMeasurements from '../components/wizard/StepMeasurements';
 import StepMockup from '../components/wizard/StepMockup';
 import StepPricing from '../components/wizard/StepPricing';
+import CheckoutForm from '../components/wizard/CheckoutForm';
 import { catalog, dashboard, mockup as mockupApi, orders, payments, pricing } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { resetWizard, useWizard } from '../context/WizardContext';
@@ -34,13 +35,10 @@ export default function DesignWizard() {
   const [savedMeasurements, setSavedMeasurements] = useState(null);
   const [placing, setPlacing] = useState(false);
   const [placeError, setPlaceError] = useState(null);
-  const [guestEmail, setGuestEmail] = useState('');
-
-  // The confirmation email carries the receipt and the design preview, so the
-  // address has to be right before the order commits — not discovered to be
-  // wrong when nothing arrives. A signed-in customer's account email is taken
-  // as given; a guest's is format-checked here and again by EmailStr server-side.
-  const emailValid = isAuthenticated || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(guestEmail.trim());
+  // Confirming the preview opens checkout rather than placing the order
+  // straight away — a physical garment needs somewhere to be sent.
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [paymentMode, setPaymentMode] = useState(null);
 
   const clothType = useMemo(
     () => clothTypes.find((c) => c.id === state.clothTypeId) ?? null,
@@ -165,7 +163,14 @@ export default function DesignWizard() {
         setGenerating(false);
       }
     },
-    [state.clothTypeId, state.materialId, state.materialColorId, state.designOptionIds, state.customDescription, dispatch],
+    [
+      state.clothTypeId,
+      state.materialId,
+      state.materialColorId,
+      state.designOptionIds,
+      state.customDescription,
+      dispatch,
+    ],
   );
 
   // Generate once on entering step 6, if we don't already have one.
@@ -192,14 +197,8 @@ export default function DesignWizard() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  async function placeOrder() {
+  async function placeOrder(details) {
     setPlaceError(null);
-    if (!emailValid) {
-      setPlaceError(
-        'Please enter a valid email address — the order confirmation and receipt are sent there.',
-      );
-      return;
-    }
     setPlacing(true);
     try {
       const measurements = {};
@@ -217,7 +216,16 @@ export default function DesignWizard() {
         mockup_url: state.mockup?.image_url ?? null,
         mockup_prompt: state.mockup?.prompt ?? null,
         mockup_model: state.mockup?.model_id ?? null,
-        ...(isAuthenticated ? {} : { guest_email: guestEmail }),
+        // A signed-in customer still supplies delivery details: the parcel may
+        // not be going to the name or address on the account.
+        customer_name: details.customer_name,
+        customer_phone: details.customer_phone,
+        delivery_address: details.delivery_address,
+        delivery_city: details.delivery_city,
+        delivery_postcode: details.delivery_postcode,
+        ...(isAuthenticated
+          ? {}
+          : { guest_email: details.email, guest_name: details.customer_name }),
       });
       // The order is committed at this point. Everything below is payment, and
       // a failure there must not lose the order — it stays pending and the
@@ -227,6 +235,7 @@ export default function DesignWizard() {
       let session = null;
       try {
         session = await payments.checkout(order.order_number);
+        setPaymentMode(session?.mode ?? null);
       } catch {
         // Deliberately swallowed: the success page reads the real payment
         // status from the server and shows its own retry.
@@ -335,9 +344,7 @@ export default function DesignWizard() {
             <div className="summary-row">
               <span className="summary-key">Details</span>
               <span className="summary-val">
-                {state.designOptionIds.length
-                  ? `${state.designOptionIds.length} selected`
-                  : 'None'}
+                {state.designOptionIds.length ? `${state.designOptionIds.length} selected` : 'None'}
               </span>
             </div>
           </div>
@@ -388,44 +395,14 @@ export default function DesignWizard() {
               Next — {STEP_LABELS[state.step]} →
             </button>
           ) : (
-            <>
-              {/* The confirmation, with the full bill and the design preview,
-                  goes to this address. Shown to signed-in customers too — they
-                  should be able to see where it's going before committing, not
-                  discover it afterwards. */}
-              <div className="field" style={{ marginBottom: 12 }}>
-                <label htmlFor="guest-email">Email for your order confirmation</label>
-                {isAuthenticated ? (
-                  <input id="guest-email" type="email" value={user?.email ?? ''} readOnly />
-                ) : (
-                  <input
-                    id="guest-email"
-                    type="email"
-                    value={guestEmail}
-                    placeholder="you@example.com"
-                    className={guestEmail && !emailValid ? 'has-warning' : ''}
-                    onChange={(e) => setGuestEmail(e.target.value)}
-                  />
-                )}
-                <p className="form-label-hint">
-                  {isAuthenticated
-                    ? 'Your receipt and order updates go to your account email.'
-                    : guestEmail && !emailValid
-                      ? "That doesn't look like an email address."
-                      : "We'll send your receipt, the design preview and every status update here."}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="btn-confirm"
-                disabled={placing || generating || !quote || !emailValid}
-                onClick={placeOrder}
-              >
-                {placing
-                  ? 'Placing your order…'
-                  : `✓ Confirm — LKR ${Number(quote?.total ?? 0).toLocaleString()}`}
-              </button>
-            </>
+            <button
+              type="button"
+              className="btn-confirm"
+              disabled={generating || !quote}
+              onClick={() => setCheckingOut(true)}
+            >
+              Confirm &amp; continue to checkout →
+            </button>
           )}
 
           {placeError && <div className="field-error">{placeError}</div>}
@@ -437,6 +414,21 @@ export default function DesignWizard() {
           )}
         </aside>
       </div>
+
+      {checkingOut && (
+        <div className="checkout-overlay">
+          <CheckoutForm
+            total={quote?.total ?? 0}
+            currency={quote?.currency ?? 'LKR'}
+            accountEmail={isAuthenticated ? user?.email : ''}
+            simulated={paymentMode !== 'stripe'}
+            busy={placing}
+            error={placeError}
+            onBack={() => setCheckingOut(false)}
+            onSubmit={placeOrder}
+          />
+        </div>
+      )}
     </>
   );
 }

@@ -30,6 +30,18 @@ class Order(Base):
     guest_email = Column(String(255), nullable=True)
     guest_name = Column(String(200), nullable=True)
 
+    # Delivery details, captured at checkout. Applies to signed-in customers as
+    # well as guests: the name and address on the parcel are not necessarily the
+    # ones on the account.
+    #
+    # There is deliberately no card column here, and there should never be one.
+    # Card details go to Stripe from the browser and never reach this server.
+    customer_name = Column(String(200), nullable=True)
+    customer_phone = Column(String(40), nullable=True)
+    delivery_address = Column(Text, nullable=True)
+    delivery_city = Column(String(120), nullable=True)
+    delivery_postcode = Column(String(20), nullable=True)
+
     # Catalogue references (nullable — a cloth type could be deactivated after ordering)
     cloth_type_id = Column(Integer, ForeignKey("cloth_types.id", ondelete="SET NULL"), nullable=True)
     material_id = Column(Integer, ForeignKey("materials.id", ondelete="SET NULL"), nullable=True)
