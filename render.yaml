@@ -95,3 +95,17 @@ services:
         sync: false
       - key: CHECKOUT_CANCEL_URL
         sync: false
+      # --- Transactional email (optional; logs to stdout when unset) ---
+      # HTTP APIs rather than SMTP by necessity: free instances block outbound
+      # traffic to ports 25, 465 and 587, so an smtplib-based mailer would time
+      # out here while working perfectly in local development.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: MAIL_PROVIDER
+        sync: false
+      # Must be a sender the active provider has verified — a domain address
+      # for Resend, or the single confirmed address for Brevo.
+      - key: MAIL_FROM
+        sync: false

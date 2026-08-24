@@ -1,23 +1,37 @@
-"""Transactional email via Resend.
+"""Transactional email via Resend or Brevo.
 
-Sends through Resend's HTTP API when `RESEND_API_KEY` is set, and otherwise
-renders the message to stdout. The console fallback is not a stub — it produces
-the exact same HTML, so the templates can be developed, screenshotted for the
-report, and reviewed without an account or a verified domain.
+Both are HTTP APIs rather than SMTP, which is not a stylistic choice: Render's
+free tier blocks outbound traffic to SMTP ports 25, 465 and 587, so anything
+built on smtplib works locally and then times out silently once deployed.
+
+With no key configured the message is rendered to stdout instead. That console
+fallback is not a stub — it produces the exact same HTML, so the templates can
+be developed, screenshotted for the report, and reviewed without an account.
 
 Every send is best-effort. Email must never be able to fail an order: the
 customer has paid, the order is in the database, and a bounced confirmation is
 an inconvenience rather than a reason to lose the sale. Callers dispatch these
 through FastAPI's BackgroundTasks so a slow API can't hold up the response.
 
-**Deliverability caveat.** Resend's shared `onboarding@resend.dev` sender only
-delivers to the address that owns the Resend account. Sending to a real
-customer requires verifying a domain and changing `MAIL_FROM`. Until then this
-works end-to-end for a demo but will not reach arbitrary recipients.
+**Which provider, and why there are two.** They are restricted in opposite
+ways, and neither is free of both restrictions:
+
+  - *Resend* authenticates a whole domain, after which it will send to anyone.
+    Until then its shared `onboarding@resend.dev` sender delivers only to the
+    address that owns the Resend account — every other recipient is refused
+    with a 403.
+  - *Brevo* verifies one sender address by emailing it a confirmation link. No
+    domain, no DNS, and it will send to any recipient. The cost is that a
+    `@gmail.com` From address carries no domain authentication, and since 2024
+    Gmail, Yahoo and Outlook may reject or spam-folder exactly that.
+
+So: Brevo to reach arbitrary customers today, Resend once a domain is verified.
+`MAIL_PROVIDER` chooses; see `active_provider` for what "auto" does.
 """
 
 from dataclasses import dataclass
 from decimal import Decimal
+from email.utils import parseaddr
 
 import httpx
 
@@ -222,22 +236,73 @@ def render_status_update(order, new_status: str) -> tuple[str, str]:
     return subject, _shell("Order update", body)
 
 
+def active_provider() -> str:
+    """Which backend `send_email` will use: "resend", "brevo" or "console".
+
+    An explicit MAIL_PROVIDER wins, but only if that provider actually has a
+    key — a typo'd or half-finished configuration falls back to the console
+    rather than firing unauthenticated requests at an API.
+
+    "auto" prefers whichever provider can reach the intended recipient. With
+    both keys present that is Brevo, because Resend on its shared sandbox
+    sender can only mail the account owner. Once MAIL_FROM moves to a verified
+    domain, Resend is unrestricted and wins instead — so verifying a domain is
+    enough to switch providers, with no second setting to remember.
+    """
+    choice = (settings.mail_provider or "auto").strip().lower()
+
+    if choice == "console":
+        return "console"
+    if choice == "resend":
+        return "resend" if settings.resend_api_key else "console"
+    if choice == "brevo":
+        return "brevo" if settings.brevo_api_key else "console"
+
+    if settings.resend_api_key and settings.brevo_api_key:
+        return "resend" if "resend.dev" not in settings.mail_from else "brevo"
+    if settings.resend_api_key:
+        return "resend"
+    if settings.brevo_api_key:
+        return "brevo"
+    return "console"
+
+
+def _sender_parts() -> tuple[str, str]:
+    """Split MAIL_FROM into (display name, address).
+
+    Resend takes the raw "Name <addr>" string, but Brevo wants the two halves
+    as separate JSON fields and rejects the combined form.
+    """
+    name, address = parseaddr(settings.mail_from)
+    return name or "ThreadCraft", address or settings.mail_from
+
+
 def send_email(to: str, subject: str, html: str) -> EmailResult:
     """Best-effort send. Never raises — the caller's transaction matters more
     than the notification."""
     if not to:
         return EmailResult(False, "none", "No recipient address on the order.")
 
-    if not settings.resend_api_key:
-        print("\n" + "=" * 70)
-        print("EMAIL (console fallback — set RESEND_API_KEY to send for real)")
-        print(f"  To      : {to}")
-        print(f"  From    : {settings.mail_from}")
-        print(f"  Subject : {subject}")
-        print(f"  HTML    : {len(html):,} bytes")
-        print("=" * 70 + "\n")
-        return EmailResult(False, "console", "Rendered to stdout; no API key configured.")
+    provider = active_provider()
+    if provider == "resend":
+        return _send_via_resend(to, subject, html)
+    if provider == "brevo":
+        return _send_via_brevo(to, subject, html)
+    return _send_to_console(to, subject, html)
 
+
+def _send_to_console(to: str, subject: str, html: str) -> EmailResult:
+    print("\n" + "=" * 70)
+    print("EMAIL (console fallback — set RESEND_API_KEY or BREVO_API_KEY to send)")
+    print(f"  To      : {to}")
+    print(f"  From    : {settings.mail_from}")
+    print(f"  Subject : {subject}")
+    print(f"  HTML    : {len(html):,} bytes")
+    print("=" * 70 + "\n")
+    return EmailResult(False, "console", "Rendered to stdout; no API key configured.")
+
+
+def _send_via_resend(to: str, subject: str, html: str) -> EmailResult:
     try:
         with httpx.Client(timeout=15) as client:
             response = client.post(
@@ -252,13 +317,53 @@ def send_email(to: str, subject: str, html: str) -> EmailResult:
                 to,
                 "403 — the onboarding@resend.dev sender only delivers to your own "
                 "account address. Verify a domain and update MAIL_FROM to reach customers.",
+                provider="resend",
             )
-        return _failed(to, f"HTTP {response.status_code}: {response.text[:200]}")
+        return _failed(to, f"HTTP {response.status_code}: {response.text[:200]}", provider="resend")
     except Exception as exc:  # noqa: BLE001
-        return _failed(to, f"{type(exc).__name__}: {exc}")
+        return _failed(to, f"{type(exc).__name__}: {exc}", provider="resend")
 
 
-def _failed(to: str, detail: str) -> EmailResult:
+def _send_via_brevo(to: str, subject: str, html: str) -> EmailResult:
+    """Brevo's transactional endpoint.
+
+    Its 400s are the interesting ones: an unverified sender fails here, not at
+    configuration time, so the message is surfaced verbatim rather than being
+    flattened into "send failed".
+    """
+    name, address = _sender_parts()
+    try:
+        with httpx.Client(timeout=15) as client:
+            response = client.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers={"api-key": settings.brevo_api_key, "accept": "application/json"},
+                json={
+                    "sender": {"name": name, "email": address},
+                    "to": [{"email": to}],
+                    "subject": subject,
+                    "htmlContent": html,
+                },
+            )
+        if response.status_code in (200, 201):
+            return EmailResult(True, "brevo", response.json().get("messageId", "sent"))
+
+        detail = response.text[:200]
+        try:
+            payload = response.json()
+            detail = f"{payload.get('code', response.status_code)}: {payload.get('message', detail)}"
+        except ValueError:
+            pass
+        if response.status_code == 400 and "sender" in detail.lower():
+            detail += (
+                f" — verify {address} as a sender at brevo.com "
+                "(Senders & IPs → Senders), or point MAIL_FROM at one you have verified."
+            )
+        return _failed(to, detail, provider="brevo")
+    except Exception as exc:  # noqa: BLE001
+        return _failed(to, f"{type(exc).__name__}: {exc}", provider="brevo")
+
+
+def _failed(to: str, detail: str, provider: str = "resend") -> EmailResult:
     """Record a failed send.
 
     These run as background tasks whose return value the caller discards, so
@@ -266,8 +371,8 @@ def _failed(to: str, detail: str) -> EmailResult:
     gets nothing and no log line says why. Printing is enough — the deployment's
     log is the only place an operator would look.
     """
-    print(f"[email] FAILED to {to}: {detail}")
-    return EmailResult(False, "resend", detail)
+    print(f"[email] FAILED via {provider} to {to}: {detail}")
+    return EmailResult(False, provider, detail)
 
 
 def absolute_media_url(url: str | None) -> str | None:
@@ -300,14 +405,34 @@ def send_status_update(order, new_status: str) -> EmailResult:
 
 
 def provider_status() -> dict:
-    return {
-        "configured": bool(settings.resend_api_key),
-        "from_address": settings.mail_from,
-        "mode": "resend" if settings.resend_api_key else "console",
-        "note": (
+    """What email will actually do right now.
+
+    Worth checking before a demo: every failure mode here is silent from the
+    customer's side, so "configured" and "who it can reach" are the two things
+    an operator needs, and the note spells out the restriction in force.
+    """
+    provider = active_provider()
+    _, address = _sender_parts()
+
+    if provider == "resend":
+        note = (
             "Resend's shared onboarding@resend.dev sender only delivers to the address "
             "that owns the Resend account. Verify a domain to reach customers."
             if "resend.dev" in settings.mail_from
             else "Custom sending domain configured."
-        ),
+        )
+    elif provider == "brevo":
+        note = (
+            f"Brevo sends from the verified sender {address}, to any recipient. A free "
+            "mailbox address carries no domain authentication, so some inboxes may "
+            "spam-folder it — verify a domain for anything beyond a demo."
+        )
+    else:
+        note = "No provider configured. Messages are rendered to stdout and not sent."
+
+    return {
+        "configured": provider != "console",
+        "from_address": settings.mail_from,
+        "mode": provider,
+        "note": note,
     }

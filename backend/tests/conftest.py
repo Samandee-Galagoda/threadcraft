@@ -42,6 +42,11 @@ def isolate_from_developer_env():
         "cf_account_id": settings.cf_account_id,
         "cf_api_token": settings.cf_api_token,
         "hf_token": settings.hf_token,
+        # Email keys included for a sharper reason than parity: without them a
+        # developer with a real key turns the console-fallback tests into live
+        # sends, billed to their account and delivered to example.com.
+        "resend_api_key": settings.resend_api_key,
+        "brevo_api_key": settings.brevo_api_key,
     }
     for key in original:
         setattr(settings, key, False if key == "ml_enabled" else None)
