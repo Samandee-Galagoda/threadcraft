@@ -105,6 +105,12 @@ export const ml = {
   status: () => api.get('/api/ml/status', { auth: false }),
 };
 
+// ── Gallery ───────────────────────────────────────────────────────────────
+// Public: the shop window is the one page a visitor sees before signing up.
+export const gallery = {
+  list: (limit = 12) => api.get(`/api/gallery?limit=${limit}`, { auth: false }),
+};
+
 // ── Payments ──────────────────────────────────────────────────────────────
 // Checkout is keyed by order number, never by an amount: the total charged is
 // the one the server already computed, so there is nothing here for a client

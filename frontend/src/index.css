@@ -943,3 +943,29 @@ footer { background:var(--dark); color:#c4a882; padding:48px; display:grid; grid
 .vpop-ok:hover { background:var(--brown); }
 @keyframes vpop-fade { from { opacity:0; } to { opacity:1; } }
 @keyframes vpop-rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
+/* ── GALLERY ──
+   One tile design serves both placements: three across inside the dark AI
+   banner, and a full grid in the gallery section. */
+.gallery-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:18px; }
+.gallery-tile { position:relative; background:var(--warm); border:1px solid var(--sand); overflow:hidden; }
+.gallery-tile img { display:block; width:100%; aspect-ratio:1; object-fit:cover; transition:transform .5s ease; }
+.gallery-tile:hover img { transform:scale(1.04); }
+.gallery-tile figcaption { padding:12px 14px 14px; background:var(--cream); }
+.gallery-garment { display:block; font-family:var(--serif); font-size:15px; color:var(--dark); letter-spacing:.03em; }
+.gallery-detail { display:block; font-size:10px; letter-spacing:.14em; color:var(--taupe); text-transform:uppercase; margin-top:3px; }
+.gallery-tag { position:absolute; top:10px; left:10px; background:rgba(44,31,20,.72); color:var(--cream); font-size:8px; letter-spacing:.16em; text-transform:uppercase; padding:4px 8px; }
+
+
+/* Inside the dark banner the tiles sit on brown, so the caption plate has to
+   invert or it punches a cream hole in the panel. */
+.ai-mockup-showcase .gallery-grid { grid-template-columns:repeat(3,1fr); gap:12px; }
+.ai-mockup-showcase .gallery-tile { background:rgba(255,255,255,.04); border-color:rgba(255,255,255,.12); }
+.ai-mockup-showcase .gallery-tile figcaption { background:rgba(255,255,255,.05); padding:10px 12px 12px; }
+.ai-mockup-showcase .gallery-garment { color:var(--sand); font-size:13px; }
+.ai-mockup-showcase .gallery-detail { font-size:9px; }
+.ai-mockup-caption { font-family:var(--serif); font-size:13px; font-style:italic; color:var(--taupe); letter-spacing:.05em; text-align:center; margin-top:16px; margin-bottom:0 !important; }
+
+@media (max-width:768px) {
+  .gallery-grid { grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; }
+}

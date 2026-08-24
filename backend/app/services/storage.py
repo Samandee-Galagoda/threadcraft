@@ -56,6 +56,34 @@ def _r2_configured() -> bool:
     )
 
 
+def media_exists(url: str | None) -> bool:
+    """Whether a stored media URL still resolves to something servable.
+
+    A database row outlives the file it points at. Local storage writes to the
+    instance's own disk, and a redeploy on an ephemeral filesystem takes every
+    generated image with it while leaving every row behind — so anything
+    listing stored media to the public needs to ask this first.
+
+    Absolute URLs (the R2 backend) are trusted without a network round-trip:
+    the bucket is durable, and a HEAD request per gallery tile would cost more
+    than a stale thumbnail.
+    """
+    if not url:
+        return False
+    if url.startswith(("http://", "https://", "data:")):
+        return True
+    if not url.startswith(LOCAL_URL_PREFIX):
+        return False
+
+    relative = url[len(LOCAL_URL_PREFIX) :].lstrip("/")
+    candidate = (LOCAL_STATIC_DIR / relative).resolve()
+    # Containment check: the URL comes from the database, and a path that
+    # escapes the media directory has no business being probed.
+    if not candidate.is_relative_to(LOCAL_STATIC_DIR.resolve()):
+        return False
+    return candidate.is_file()
+
+
 def _save_local(data: bytes, key: str) -> str:
     path = LOCAL_STATIC_DIR / key
     path.parent.mkdir(parents=True, exist_ok=True)

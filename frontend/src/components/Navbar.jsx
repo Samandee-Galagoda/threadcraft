@@ -18,7 +18,6 @@ export default function Navbar({ backLink = false, secure = false, onBack }) {
         <ul className="nav-links">
           <li><Link to="/">Home</Link></li>
           <li><Link to="/measurement-guide">Measurement Guide</Link></li>
-          <li><Link to="/#gallery">Gallery</Link></li>
         </ul>
       )}
       

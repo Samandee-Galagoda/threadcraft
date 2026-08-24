@@ -4,7 +4,9 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import CatalogueModal from '../components/CatalogueModal';
 import Swatch from '../components/Swatch';
-import { catalog } from '../api';
+import GalleryStrip from '../components/GalleryStrip';
+import { withSamples } from '../lib/gallerySamples';
+import { catalog, gallery } from '../api';
 
 // Names only — used when the API is unreachable, so the section still reads as
 // a fabric list rather than collapsing.
@@ -21,6 +23,7 @@ const FALLBACK_FABRICS = [
 export default function Home() {
   const [catalogueOpen, setCatalogueOpen] = useState(false);
   const [materials, setMaterials] = useState([]);
+  const [designs, setDesigns] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +31,20 @@ export default function Home() {
       .materials()
       .then((rows) => !cancelled && setMaterials(rows))
       .catch(() => {}); // the fallback list covers this
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Same reasoning as the fabrics above: a cold backend must not blank the
+  // page. withSamples() pads whatever comes back, so the sections render
+  // identically whether the API answered, was slow, or failed outright.
+  useEffect(() => {
+    let cancelled = false;
+    gallery
+      .list(3)
+      .then((rows) => !cancelled && setDesigns(rows))
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -135,10 +152,11 @@ export default function Home() {
           <p>Our AI mockup generator creates a photorealistic preview of your garment from your description and style choices. If you love it, we stitch it. Powered by Stable Diffusion XL.</p>
           <Link to="/design" className="btn-outline" style={{borderColor:'var(--taupe)',color:'var(--taupe)'}}>Try the designer</Link>
         </div>
-        <div className="ai-mockup-placeholder">
-          <svg viewBox="0 0 64 64"><rect x="8" y="8" width="48" height="48" rx="4" strokeWidth="1.5"/><circle cx="22" cy="26" r="5" strokeWidth="1.5"/><path d="M8 44l12-12 10 10 8-10 18 12" strokeWidth="1.5" fill="none"/></svg>
-          <p>AI-generated mockup preview</p>
-          <div style={{fontSize:'10px',letterSpacing:'.15em',color:'#6b5040',textTransform:'uppercase'}}>Your design will appear here</div>
+        {/* Was an empty placeholder box. Showing real output makes the claim
+            above checkable, which an illustration of a photograph does not. */}
+        <div className="ai-mockup-showcase">
+          <GalleryStrip items={withSamples(designs, 3)} />
+          <p className="ai-mockup-caption">Recent previews · yours appears here</p>
         </div>
       </div>
 
