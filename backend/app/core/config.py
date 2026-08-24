@@ -99,7 +99,20 @@ class Settings(BaseSettings):
     checkout_cancel_url: str = "http://localhost:5173/success"
 
     # Email
+    #
+    # Two providers, because they fail in opposite ways. Resend authenticates a
+    # domain and reaches anyone, but its shared onboarding@resend.dev sender is
+    # restricted to the account owner's own address. Brevo verifies a single
+    # sender address by clicking a link — no domain, no DNS, sends to anyone —
+    # at the cost of a From address that isn't domain-authenticated, which
+    # Gmail and Outlook may treat as spam.
+    #
+    # `mail_provider` picks between them: "resend", "brevo", "console", or
+    # "auto" (the default) to choose from whichever keys are present. See
+    # app.services.email.active_provider for the auto rule.
+    mail_provider: str = "auto"
     resend_api_key: str | None = None
+    brevo_api_key: str | None = None
     mail_from: str = "ThreadCraft <onboarding@resend.dev>"
 
     # Trained ML models on the Hugging Face Hub.

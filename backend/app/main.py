@@ -8,6 +8,7 @@ from app.routers import (
     catalog,
     dashboard,
     designs,
+    gallery,
     health,
     measurements,
     ml,
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(catalog.router)
+    app.include_router(gallery.router)
     app.include_router(measurements.router)
     app.include_router(quote.router)
     app.include_router(orders.router)
