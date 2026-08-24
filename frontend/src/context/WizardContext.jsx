@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer } from 'react';
 import {
   STORAGE_KEY,
   createInitialState,
@@ -37,7 +37,25 @@ export function WizardProvider({ children }) {
     }
   }, [state]);
 
-  const value = useMemo(() => ({ state, dispatch }), [state]);
+  /**
+   * Throw the design in progress away and start a clean one.
+   *
+   * Both halves matter: the reducer is pure, so it cannot invent the new draft
+   * id itself, and the stored copy has to go or the next visit to /design
+   * rehydrates the design we just discarded. Exposed here rather than left to
+   * each caller because a bare `{ type: 'RESET' }` leaves draftId undefined,
+   * which quietly breaks reference-image uploads.
+   */
+  const reset = useCallback(() => {
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Same reasoning as the persist effect — storage is a convenience.
+    }
+    dispatch({ type: 'RESET', draftId: newDraftId() });
+  }, []);
+
+  const value = useMemo(() => ({ state, dispatch, reset }), [state, reset]);
   return <WizardContext.Provider value={value}>{children}</WizardContext.Provider>;
 }
 

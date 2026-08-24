@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export default function Navbar({ backLink = false, secure = false }) {
+export default function Navbar({ backLink = false, secure = false, onBack }) {
   // Reads AuthContext rather than localStorage directly. The old version knew
   // whether a token existed but nothing about the user, so an admin had no way
   // to reach /admin except by typing the URL.
@@ -10,7 +10,7 @@ export default function Navbar({ backLink = false, secure = false }) {
   return (
     <nav>
       {backLink ? (
-        <Link to="/" className="back-link">
+        <Link to="/" className="back-link" onClick={onBack}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M19 12H5m0 0 7 7m-7-7 7-7"/></svg>
           Back to home
         </Link>

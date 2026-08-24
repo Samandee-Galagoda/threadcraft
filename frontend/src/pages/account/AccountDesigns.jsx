@@ -7,7 +7,7 @@ import { money, shortDate } from '../../lib/adminFormat';
 
 export default function AccountDesigns() {
   const navigate = useNavigate();
-  const { dispatch } = useWizard();
+  const { dispatch, reset } = useWizard();
   const [designs, setDesigns] = useState([]);
   const [pastOrders, setPastOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +39,9 @@ export default function AccountDesigns() {
    *  offer.
    */
   function reorder(payload, label) {
-    dispatch({ type: 'RESET' });
+    // reset() rather than a bare RESET: that left draftId undefined, so a
+    // reference-image upload in the restored design had no draft to attach to.
+    reset();
     if (payload.cloth_type_id) {
       dispatch({
         type: 'SELECT_CLOTH_TYPE',
@@ -58,7 +60,14 @@ export default function AccountDesigns() {
       dispatch({ type: 'SELECT_COLOR', id: payload.material_color_id });
     }
     for (const optionId of payload.design_option_ids || []) {
-      dispatch({ type: 'TOGGLE_OPTION', id: optionId });
+      // No groupOptionIds here: the plan lists one option per group already, so
+      // there is nothing in the same group to displace.
+      dispatch({ type: 'TOGGLE_OPTION', id: optionId, groupOptionIds: [] });
+    }
+    // The design step requires a description, so a restored design has to bring
+    // its own — otherwise every reorder stops there asking for one.
+    if (payload.custom_description) {
+      dispatch({ type: 'SET_DESCRIPTION', value: payload.custom_description });
     }
     if (payload.measurements && Object.keys(payload.measurements).length) {
       dispatch({ type: 'SET_MEASUREMENTS', values: payload.measurements });

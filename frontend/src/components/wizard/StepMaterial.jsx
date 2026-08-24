@@ -25,13 +25,7 @@ export default function StepMaterial({ materials, loading, error }) {
               className={`mat-item ${state.materialId === material.id ? 'selected' : ''} ${
                 outOfStock ? 'disabled' : ''
               }`}
-              onClick={() =>
-                dispatch({
-                  type: 'SELECT_MATERIAL',
-                  id: material.id,
-                  colorId: material.colors?.[0]?.id ?? null,
-                })
-              }
+              onClick={() => dispatch({ type: 'SELECT_MATERIAL', id: material.id })}
             >
               <Swatch material={material} />
               <div className="mat-name">{material.name}</div>
@@ -54,7 +48,14 @@ export default function StepMaterial({ materials, loading, error }) {
 
       {selected?.colors?.length > 0 && (
         <div className="form-section" style={{ marginTop: 36 }}>
-          <span className="form-label">{selected.name} — colour</span>
+          <span className="form-label">
+            {selected.name} — colour <span className="required">*</span>
+          </span>
+          {!state.materialColorId && (
+            <p className="form-label-hint" style={{ marginBottom: 12 }}>
+              Pick a colour to continue.
+            </p>
+          )}
           <div className="colour-grid">
             {selected.colors.map((colour) => (
               <button

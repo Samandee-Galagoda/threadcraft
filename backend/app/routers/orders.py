@@ -196,6 +196,7 @@ def reorder_plan(
         material_color_id=colour.id if colour else None,
         design_option_ids=option_ids,
         measurements=order.measurements_snapshot or {},
+        custom_description=order.custom_description or "",
         unavailable=unavailable,
     )
 

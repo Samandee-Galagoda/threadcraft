@@ -92,7 +92,18 @@ function App() {
             <Route index element={<AccountDashboard />} />
             <Route path="orders" element={<AccountOrders />} />
             <Route path="measurements" element={<AccountMeasurements />} />
-            <Route path="designs" element={<AccountDesigns />} />
+            {/* Wrapped because "reorder" loads a past design into the wizard,
+                and useWizard throws without a provider — this page could not
+                render at all. The handoff to /design goes through
+                sessionStorage, which is what that state is persisted for. */}
+            <Route
+              path="designs"
+              element={
+                <WizardProvider>
+                  <AccountDesigns />
+                </WizardProvider>
+              }
+            />
             <Route path="profile" element={<AccountProfile />} />
           </Route>
           <Route path="/measurement-guide" element={<MeasurementGuide />} />

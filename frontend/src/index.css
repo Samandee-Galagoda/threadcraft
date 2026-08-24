@@ -922,3 +922,24 @@ footer { background:var(--dark); color:#c4a882; padding:48px; display:grid; grid
   .meas-item:nth-child(odd) { padding-right:0; border-right:none; }
   .meas-item:nth-child(even) { padding-left:0; }
 }
+
+/* Required-field marker. Was only styled inside .meas-field-head; the design
+   and material steps mark their required choices the same way. */
+.required { color:#A65A4A; }
+
+/* ── VALIDATION POPUP ──
+   Sits above the checkout overlay (z-index 90) so it is still reachable when
+   the blocked action is the checkout's own submit button. */
+.vpop-backdrop { position:fixed; inset:0; background:rgba(44,31,20,.45); display:flex; align-items:center; justify-content:center; z-index:120; padding:20px; animation:vpop-fade .18s ease-out; }
+.vpop-card { background:var(--cream); border:1px solid var(--sand); border-top:2px solid #A65A4A; width:100%; max-width:380px; padding:24px 26px 22px; animation:vpop-rise .2s ease-out; }
+.vpop-head { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+.vpop-icon { flex:none; width:26px; height:26px; border-radius:50%; background:#A65A4A; color:var(--cream); font-family:var(--sans); font-size:15px; font-weight:500; display:flex; align-items:center; justify-content:center; }
+.vpop-head h4 { font-family:var(--serif); font-size:20px; font-weight:400; color:var(--dark); letter-spacing:.02em; }
+.vpop-single { font-size:13px; line-height:1.6; color:var(--text); }
+.vpop-list { list-style:none; display:flex; flex-direction:column; gap:9px; }
+.vpop-list li { font-size:13px; line-height:1.5; color:var(--text); padding-left:14px; position:relative; }
+.vpop-list li::before { content:'·'; position:absolute; left:2px; color:var(--taupe); font-weight:500; }
+.vpop-ok { display:block; width:100%; margin-top:20px; background:var(--dark); color:var(--cream); border:none; padding:12px; font-size:11px; letter-spacing:.22em; text-transform:uppercase; font-family:var(--sans); cursor:pointer; transition:background .2s; }
+.vpop-ok:hover { background:var(--brown); }
+@keyframes vpop-fade { from { opacity:0; } to { opacity:1; } }
+@keyframes vpop-rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
