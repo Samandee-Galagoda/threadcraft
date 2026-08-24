@@ -152,7 +152,7 @@ export default function StepMeasurements({ clothType, savedMeasurements }) {
   return (
     <div>
       <h1 className="step-title">Your Measurements</h1>
-      <p className="step-sub">Step 4 of 6 · All values in centimetres</p>
+      <p className="step-sub">Step 4 of 6 · All values in centimetres · every field required</p>
 
       <div className="form-section">
         <span className="form-label">About you</span>
@@ -253,6 +253,11 @@ export default function StepMeasurements({ clothType, savedMeasurements }) {
 
       <div className="form-section">
         <span className="form-label">{clothType?.name} measurements</span>
+        {fields.length > 0 && (
+          <p className="form-label-hint" style={{ marginBottom: 14 }}>
+            Fill in all {fields.length} measurements — the garment is cut to these numbers.
+          </p>
+        )}
         {fields.length === 0 && (
           <p className="form-label-hint">
             No measurement fields are configured for this garment yet.
@@ -268,7 +273,7 @@ export default function StepMeasurements({ clothType, savedMeasurements }) {
                 <label htmlFor={`m-${field.field_key}`}>
                   {field.letter && <span className="letter-badge">{field.letter}</span>}
                   {field.label}
-                  {field.is_required && <span className="required">*</span>}
+                  <span className="required">*</span>
                 </label>
                 <span className="meas-range">
                   {Number(field.min_value)}–{Number(field.max_value)} {field.unit}

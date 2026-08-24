@@ -132,6 +132,7 @@ class ReorderPlan(BaseModel):
     material_color_id: int | None = None
     design_option_ids: list[int] = Field(default_factory=list)
     measurements: dict = Field(default_factory=dict)
+    custom_description: str = ""
     unavailable: list[str] = Field(default_factory=list)
 
 

@@ -8,17 +8,30 @@ import StepMeasurements from '../components/wizard/StepMeasurements';
 import StepMockup from '../components/wizard/StepMockup';
 import StepPricing from '../components/wizard/StepPricing';
 import CheckoutForm from '../components/wizard/CheckoutForm';
+import ValidationPopup from '../components/wizard/ValidationPopup';
 import { catalog, dashboard, mockup as mockupApi, orders, payments, pricing } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { resetWizard, useWizard } from '../context/WizardContext';
-import { TOTAL_STEPS, highestUnlockedStep, isStepComplete } from '../lib/wizardReducer';
+import { TOTAL_STEPS, highestUnlockedStep, stepProblems } from '../lib/wizardReducer';
 
 const STEP_LABELS = ['Cloth', 'Design', 'Material', 'Measure', 'Pricing', 'AI Preview'];
+
+// Heading for the popup that appears when a step is left unfinished. Indexed by
+// step number, so index 0 is unused.
+const BLOCKED_TITLES = [
+  null,
+  'Choose a garment first',
+  'Your design needs a little more',
+  'Fabric and colour needed',
+  'Measurements incomplete',
+  'Not ready yet',
+  'Not ready yet',
+];
 
 export default function DesignWizard() {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
-  const { state, dispatch } = useWizard();
+  const { state, dispatch, reset } = useWizard();
 
   const [clothTypes, setClothTypes] = useState([]);
   const [materials, setMaterials] = useState([]);
@@ -39,6 +52,8 @@ export default function DesignWizard() {
   // straight away — a physical garment needs somewhere to be sent.
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentMode, setPaymentMode] = useState(null);
+  // { title, problems } while a validation popup is on screen.
+  const [blocked, setBlocked] = useState(null);
 
   const clothType = useMemo(
     () => clothTypes.find((c) => c.id === state.clothTypeId) ?? null,
@@ -188,11 +203,31 @@ export default function DesignWizard() {
   }, [state.step, state.mockup, generating, generateMockup]);
 
   // ── Navigation ──────────────────────────────────────────────────────────
-  const unlocked = highestUnlockedStep(state);
-  const canAdvance = isStepComplete(state, state.step);
+  // The garment carries its own option groups and measurement fields, and the
+  // fabric its colours, so validation needs both alongside the wizard state.
+  const validationContext = useMemo(() => ({ clothType, material }), [clothType, material]);
+  const unlocked = highestUnlockedStep(state, validationContext);
+
+  // A session restored from sessionStorage can name a step the current
+  // selection no longer justifies — it was saved by a build with looser rules,
+  // or the customer changed garment and lost its design options. Snap back to
+  // the first unfinished step once the catalogue is in, so the same rules that
+  // gate the Next button gate a restored session.
+  useEffect(() => {
+    if (catalogLoading) return;
+    if (state.step > unlocked) dispatch({ type: 'SET_STEP', step: unlocked });
+  }, [catalogLoading, state.step, unlocked, dispatch]);
 
   function goToStep(step) {
-    if (step > unlocked) return;
+    // Going back is always allowed; going forward past an unfinished step says
+    // what is missing rather than doing nothing, which reads as a broken button.
+    if (step > unlocked) {
+      const problems = stepProblems(state, unlocked, validationContext);
+      if (problems.length) {
+        setBlocked({ title: BLOCKED_TITLES[unlocked] ?? 'Not ready yet', problems });
+        return;
+      }
+    }
     dispatch({ type: 'SET_STEP', step });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -260,7 +295,11 @@ export default function DesignWizard() {
 
   return (
     <>
-      <Navbar backLink />
+      {/* Going back to the home page abandons the design rather than parking
+          it: a customer who leaves mid-wizard is starting over, and returning
+          to half-made choices they can no longer remember making is worse than
+          an empty first step. */}
+      <Navbar backLink onBack={reset} />
 
       <div className="progress-wrap">
         <div className="progress-steps">
@@ -273,7 +312,9 @@ export default function DesignWizard() {
               <button
                 type="button"
                 key={label}
-                disabled={isLocked}
+                // Not `disabled`: a disabled button swallows the click, and the
+                // customer learns nothing. It still looks locked.
+                aria-disabled={isLocked}
                 className={`prog-step ${isDone ? 'done' : ''} ${isActive ? 'active' : ''} ${
                   isLocked ? 'locked' : ''
                 }`}
@@ -389,7 +430,6 @@ export default function DesignWizard() {
             <button
               type="button"
               className="btn-next"
-              disabled={!canAdvance}
               onClick={() => goToStep(state.step + 1)}
             >
               Next — {STEP_LABELS[state.step]} →
@@ -414,6 +454,14 @@ export default function DesignWizard() {
           )}
         </aside>
       </div>
+
+      {blocked && (
+        <ValidationPopup
+          title={blocked.title}
+          problems={blocked.problems}
+          onClose={() => setBlocked(null)}
+        />
+      )}
 
       {checkingOut && (
         <div className="checkout-overlay">

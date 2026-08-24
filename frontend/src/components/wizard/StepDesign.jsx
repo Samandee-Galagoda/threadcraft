@@ -83,7 +83,9 @@ export default function StepDesign({ clothType, onSuggestClothType }) {
         const groupOptionIds = group.options.map((o) => o.id);
         return (
           <div className="form-section" key={group.id}>
-            <span className="form-label">{group.label}</span>
+            <span className="form-label">
+              {group.label} <span className="required">*</span>
+            </span>
             <div className="tags-wrap">
               {group.options.map((option) => (
                 <button
@@ -109,7 +111,7 @@ export default function StepDesign({ clothType, onSuggestClothType }) {
 
       <div className="form-section">
         <span className="form-label">
-          Describe your design <span className="form-label-hint">(optional)</span>
+          Describe your design <span className="required">*</span>
         </span>
         <textarea
           placeholder="e.g. a midi dress with a fitted bodice and a soft flared skirt…"
