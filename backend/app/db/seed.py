@@ -16,6 +16,7 @@ from decimal import Decimal
 
 from app.core.security import get_password_hash
 from app.db.base import Base
+from app.db.design_tags import CLOTH_TYPE_GROUPS, GLOBAL_GROUPS
 from app.db.session import SessionLocal, engine
 from app.models.catalog import (
     ClothType,
@@ -437,42 +438,6 @@ MEASUREMENT_FIELDS = {
     ],
 }
 
-OPTION_GROUPS = {
-    "fit": [
-        ("slim_fit", "Slim fit", "close-fitting silhouette", 0, 1.00),
-        ("regular_fit", "Regular fit", "regular fit", 0, 1.05),
-        ("oversized", "Oversized", "oversized loose fit", 0, 1.15),
-        ("fitted", "Fitted", "fitted silhouette", 100, 1.02),
-        ("flowy", "Flowy", "flowing loose drape", 150, 1.20),
-    ],
-    "neckline": [
-        ("v_neck", "V-neck", "V-neck", 0, 1.00),
-        ("round_neck", "Round neck", "round neckline", 0, 1.00),
-        ("square_neck", "Square neck", "square neckline", 50, 1.00),
-        ("off_shoulder", "Off-shoulder", "off-shoulder neckline", 200, 1.05),
-        ("collar", "Collar", "collared neckline", 150, 1.05),
-        ("halter", "Halter", "halter neckline", 200, 1.03),
-    ],
-    "sleeve": [
-        ("sleeveless", "Sleeveless", "sleeveless", 0, 0.90),
-        ("short_sleeve", "Short sleeve", "short sleeves", 0, 1.00),
-        ("three_quarter_sleeve", "3/4 sleeve", "three-quarter length sleeves", 100, 1.08),
-        ("long_sleeve", "Long sleeve", "long sleeves", 150, 1.15),
-        ("puffed_sleeve", "Puffed sleeve", "puffed sleeves", 300, 1.20),
-        ("bell_sleeve", "Bell sleeve", "flowing bell sleeves", 350, 1.22),
-    ],
-    "pattern": [
-        ("plain", "Plain / solid", "plain solid colour", 0, 1.00),
-        ("floral", "Floral", "floral print", 200, 1.00),
-        ("striped", "Striped", "striped pattern", 150, 1.00),
-        ("embroidered", "Embroidered", "detailed embroidery", 600, 1.05),
-        ("lace_trim", "Lace trim", "delicate lace trim", 400, 1.03),
-        ("pockets", "Pockets", "functional pockets", 150, 1.05),
-        ("front_buttons", "Front buttons", "front button placket", 100, 1.02),
-        ("side_zip", "Side zip", "concealed side zip", 100, 1.00),
-    ],
-}
-
 MATERIALS = [
     dict(
         slug="cotton",
@@ -625,30 +590,49 @@ def seed() -> None:
         db.flush()
         print(f"Seeded {len(CLOTH_TYPES)} cloth types with measurement fields.")
 
-        # --- Design option groups + options (apply to every cloth type: cloth_type_id=None) ---
-        for group_code, options in OPTION_GROUPS.items():
+        # --- Design option groups + options ---
+        # Fit and pattern are global (cloth_type_id=None); everything else is
+        # scoped to the garment it makes sense on, so trousers are never asked
+        # for a neckline. See app/db/design_tags.
+        def _add_group(cloth_type_id, code, label, options, sort_order):
             group = DesignOptionGroup(
-                cloth_type_id=None,
-                code=group_code,
-                label=group_code.replace("_", " ").title(),
+                cloth_type_id=cloth_type_id,
+                code=code,
+                label=label,
                 selection_type="single",
+                sort_order=sort_order,
             )
             db.add(group)
             db.flush()
-            for i, (code, label, prompt_term, stitch_premium, fabric_mult) in enumerate(options):
+            for i, (opt_code, opt_label, prompt_term, stitch_premium, fabric_mult) in enumerate(options):
                 db.add(
                     DesignOption(
                         group_id=group.id,
-                        code=code,
-                        label=label,
+                        code=opt_code,
+                        label=opt_label,
                         ai_prompt_term=prompt_term,
                         stitching_premium=Decimal(stitch_premium),
                         fabric_multiplier=Decimal(str(fabric_mult)),
                         sort_order=i,
                     )
                 )
+
+        group_count = 0
+        for order, (code, (label, options)) in enumerate(GLOBAL_GROUPS.items()):
+            _add_group(None, code, label, options, order)
+            group_count += 1
+
+        for slug, groups in CLOTH_TYPE_GROUPS.items():
+            cloth_type = cloth_type_by_slug.get(slug)
+            if not cloth_type:
+                continue
+            for order, (code, label, options) in enumerate(groups):
+                # Offset so garment-specific groups sort after the global ones.
+                _add_group(cloth_type.id, code, label, options, len(GLOBAL_GROUPS) + order)
+                group_count += 1
+
         db.flush()
-        print(f"Seeded {len(OPTION_GROUPS)} design option groups.")
+        print(f"Seeded {group_count} design option groups.")
 
         # --- Materials + colors ---
         for mat_data in MATERIALS:
@@ -714,13 +698,17 @@ def seed() -> None:
             ct = rng.choice(cloth_types)
             chosen_material = rng.choice(seeded_materials)
             chosen_colour = rng.choice(chosen_material.colors) if chosen_material.colors else None
+            # Both the global groups and this garment's own, so a demo trouser
+            # order carries a leg cut rather than only a fit and a pattern.
             chosen_options = [
                 option
                 for group in db.query(DesignOptionGroup)
-                .filter(DesignOptionGroup.cloth_type_id.is_(None))
+                .filter(
+                    (DesignOptionGroup.cloth_type_id.is_(None)) | (DesignOptionGroup.cloth_type_id == ct.id)
+                )
                 .all()
                 for option in ([rng.choice(group.options)] if group.options else [])
-            ][:2]
+            ][:3]
             days_ago = rng.randint(1, 90)
             created = now - timedelta(days=days_ago)
             n_stages = rng.randint(1, len(STATUS_FLOW))
