@@ -47,7 +47,13 @@ class ClothType(Base):
         order_by="MeasurementField.sort_order",
     )
     option_groups = relationship(
-        "DesignOptionGroup", back_populates="cloth_type", cascade="all, delete-orphan"
+        "DesignOptionGroup",
+        back_populates="cloth_type",
+        cascade="all, delete-orphan",
+        # Ordered now that the order carries meaning — a garment's groups read
+        # neckline, sleeve, length rather than in whatever order the rows come
+        # back. The options relationship has always sorted this way.
+        order_by="DesignOptionGroup.sort_order",
     )
 
 
